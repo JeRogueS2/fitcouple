@@ -157,7 +157,7 @@ body { display: flex; flex-direction: column; overflow: hidden; }
 .purple { color: var(--purple); }
 
 /* ── ACTIVITY CHIPS ── */
-.activity-list { display: flex; flex-wrap: wrap; gap: 8px; }
+.activity-list { display: flex; flew-wrap: wrap; gap: 8px; }
 .activity-chip {
   display: flex; align-items: center; gap: 6px;
   background: var(--card2); border-radius: 20px;
@@ -400,7 +400,7 @@ select.form-input { cursor: pointer; }
         </div>
         <div class="form-group">
           <label class="form-label">Idade</label>
-          <input type="number" class="form-input" id="sg_age" placeholder="32">
+          <input type="number" class="form-input" id="sG_age" placeholder="32">
         </div>
       </div>
       <div class="form-row">
@@ -846,7 +846,7 @@ select.form-input { cursor: pointer; }
 <script>
 // ═══════════════════════════════════════════════════════
 //  DATA
-// ═══════════════════════════════════════════════════════
+// ══════════════════════════════════════════════════════
 const FOOD_DB = [
   // Proteínas
   {id:1,name:'Frango peito grelhado',cal:165,p:31,c:0,f:3.6},
@@ -871,7 +871,7 @@ const FOOD_DB = [
   {id:19,name:'Aveia em flocos',cal:394,p:14,c:67,f:8.5},
   {id:20,name:'Banana prata',cal:92,p:1.3,c:23,f:0.1},
   {id:21,name:'Banana nanica',cal:89,p:1.4,c:23,f:0.1},
-  {id:22,name:'Maçã',cal:56,p:0.3,c:15,f:0.2},
+  {id:22,name:'Maç�3',cal:56,p:0.3,c:15,f:0.2},
   {id:23,name:'Laranja',cal:47,p:0.9,c:12,f:0.1},
   {id:24,name:'Manga',cal:60,p:0.8,c:15,f:0.4},
   {id:25,name:'Morango',cal:32,p:0.7,c:7.7,f:0.3},
@@ -1223,7 +1223,7 @@ function renderDashboard() {
   }
 }
 
-// ═══════════════════════════════════════════════════════
+// ══════════════════════════════════════════════════════
 //  FOOD SCREEN
 // ═══════════════════════════════════════════════════════
 let activeMealIndex = 0;
@@ -1274,7 +1274,7 @@ function deleteFoodItem(mealIndex, itemIndex) {
 
 // ═══════════════════════════════════════════════════════
 //  FOOD MODAL
-// ═══════════════════════════════════════════════════════
+// ══════════════════════════════════════════════════════
 let pendingFood = null;
 let currentSearchResults = [];
 let searchDebounceTimer = null;
@@ -1428,7 +1428,7 @@ async function handleFoodPhoto(input) {
     const mimeType = file.type || 'image/jpeg';
     await analyzePhotoWithGemini(base64, mimeType, el);
   };
-  reader.readAsDataURL(file);
+  reader.readAsDataURL.file);
   input.value = '';
 }
 
@@ -1776,40 +1776,55 @@ function renderCouplePanel() {
       const key = d.toISOString().slice(0,10);
       if (u.days[key] && u.days[key].workouts.length > 0) weekW++;
     }
+    const changeColor = change!==null ? (parseFloat(change)<=0 ? 'var(--green)' : 'var(--red)') : '';
+    const changeSign = change!==null && parseFloat(change)>0 ? '+' : '';
+    const changeHtml = change!==null
+      ? '<div style="font-size:11px;color:'+changeColor+'">'+changeSign+change+' kg total</div>'
+      : '<div style="font-size:11px;color:var(--text3)">sem histórico</div>';
     return `
       <div style="flex:1;background:var(--card2);border-radius:var(--radius-sm);padding:12px;text-align:center">
         <div style="font-size:28px">${icons[uid]}</div>
         <div style="font-size:14px;font-weight:700;margin-top:4px">${u.profile.name}</div>
         <div style="font-size:22px;font-weight:800;color:var(--green);margin-top:8px">${lastW}<small style="font-size:12px;font-weight:400;color:var(--text2)"> kg</small></div>
-        ${change!==null ? `<div style="font-size:11px;color:${parseFloat(change)<=0?'var(--green)':'var(--red)'}">${parseFloat(change)>0?'+':''}${change} kg total</div>` : '<div style="font-size:11px;color:var(--text3)">sem histórico</div>';
-    return `
-      <div style="flex:1;background:var(--card2);border-radius:var(--radius-sm);padding:12px;text-align:center">
-        <div style="font-size:28px">${icons[uid]}</div>
-        <div style="font-size:14px;font-weight:700;margin-top:4px">${u.profile.name}</div>
-        <div style="font-size:22px;font-weight:800;color:var(--green);margin-top:8px">${lastW}<small style="font-size:12px;font-weight:400;color:var(--text2)"> kg</small></div>
-        ${change!==null ? `<div style="font-size:11px;color:${parseFloat(change)<=0?'var(--green)':'var(--red)'}">${parseFloat(change)>0?'+':''}${change} kg total</div>` : '<div style="font-size:11px;color:var(--text3)">sem histórico</div>';
-    const goal = calcGoal(u.profile);
-    const today = todayKey();
-    const todayCal = getDayTotalsForUser(u, today).cal;
-    const deficit = goal - todayCal;
-    const wl = [...u.weightLog].sort((a,b) => b.date.localeCompare(a.date));
-    const lastW = wl.length > 0 ? wl[0].w : u.profile.weight;
-    const firstW = wl.length > 1 ? wl[wl.length-1].w : null;
-    const change = firstW ? (lastW - firstW).toFixed(1) : null;
-    // treinos na semana atual (seg a dom)
-    const now = new Date();
-    const mon = new Date(now); mon.setDate(now.getDate() - ((now.getDay()+6)%7));
-    let weekW = 0;
-    for (let i=0; i<7; i++) {
-      const d = new Date(mon); d.setDate(mon.getDate()+i);
-      const key = d.toISOString().slice(0,10);
-      if (u.days[key] && u.days[key].workouts.length > 0) weekW++;
-    }
-    return `
-      <div style="flex:1;background:var(--card2);border-radius:var(--radius-sm);padding:12px;text-align:center">
-        <div style="font-size:28px">${icons[uid]}</div>
-        <div style="font-size:14px;font-weight:700;margin-top:4px">${u.profile.name}</div>
-        <div style="font-size:22px;font-weight:800;color:var(--green);margin-top:8px">${lastW}<small style="font-size:12px;font-weight:400nction formatDate(dateStr) {
+        ${changeHtml}
+        <div style="height:1px;background:var(--border);margin:10px 0"></div>
+        <div style="font-size:10px;color:var(--text2);text-transform:uppercase;letter-spacing:.4px">Hoje</div>
+        <div style="font-size:16px;font-weight:700;color:var(--orange);margin-top:3px">${todayCal} kcal</div>
+        <div style="font-size:10px;color:var(--text2)">meta ${goal}</div>
+        <div style="font-size:12px;font-weight:600;margin-top:3px;color:${deficit>=0?'var(--green)':'var(--red)'}">
+          ${deficit>=0?'⚡ '+deficit+' déficit':'⬆️ '+Math.abs(deficit)+' acima'}
+        </div>
+        <div style="height:1px;background:var(--border);margin:10px 0"></div>
+        <div style="font-size:10px;color:var(--text2);text-transform:uppercase;letter-spacing:.4px">Semana</div>
+        <div style="font-size:20px;font-weight:800;color:var(--blue);margin-top:3px">${weekW}<small style="font-size:11px;font-weight:400;color:var(--text2)">x treinos</small></div>
+      </div>`;
+  }).join('');
+}
+
+function renderProgressScreen() {
+  renderCouplePanel();
+  const wl = user().weightLog;
+  const histEl = document.getElementById('weightHistoryList');
+  if (wl.length === 0) {
+    histEl.innerHTML = '<div class="empty-state"><p>Sem registros ainda</p></div>';
+  } else {
+    const sorted = [...wl].sort((a,b) => b.date.localeCompare(a.date));
+    histEl.innerHTML = sorted.map((entry, i) => {
+      const prev = sorted[i+1];
+      const diff = prev ? (entry.w - prev.w).toFixed(1) : null;
+      const diffStr = diff ? `<span class="weight-diff ${diff>0?'red':'green'}">${diff>0?'+':''}${diff} kg</span>` : '';
+      return `<div class="weight-log-item">
+        <div class="weight-date">${formatDate(entry.date)}</div>
+        <div style="display:flex;align-items:center;gap:8px">
+          ${diffStr}
+          <div class="weight-val">${entry.w} kg</div>
+        </div>
+      </div>`;
+    }).join('');
+  }
+}
+
+function formatDate(dateStr) {
   const d = new Date(dateStr + 'T12:00:00');
   return d.toLocaleDateString('pt-BR', {day:'numeric', month:'short', year:'numeric'});
 }
@@ -1952,12 +1967,4 @@ const thomazReady = state.thomaz.profile.setup;
 const jessicaReady = state.jessica.profile.setup;
 
 if (thomazReady || jessicaReady) {
-  currentUser = thomazReady ? 'thomaz' : 'jessica';
-  launchApp();
-} else {
-  // Show setup
-  document.getElementById('setupScreen').classList.add('active');
-}
-</script>
-</body>
-</html>
+  currentUser = thoser = tho
