@@ -645,13 +645,18 @@ select.form-input { cursor: pointer; }
 
     <div class="card">
       <div class="card-title">Integrações</div>
-      <div class="integration-item">
-        <div class="integration-icon">⌚</div>
-        <div class="integration-info">
-          <div class="integration-name">Garmin Connect</div>
-          <div class="integration-status">Importar treinos e calorias</div>
+      <div class="integration-item" id="stravaIntegration" style="flex-direction:column;align-items:flex-start;gap:10px">
+        <div style="display:flex;align-items:center;gap:12px;width:100%">
+          <div class="integration-icon">🏃</div>
+          <div class="integration-info">
+            <div class="integration-name">Strava <small style="color:var(--text3);font-size:11px;font-weight:400">· inclui Garmin</small></div>
+            <div class="integration-status" id="stravaStatus">Conecte para importar seus treinos</div>
+          </div>
+          <div id="stravaStatusBadge"><span class="tag-soon">Desconectado</span></div>
         </div>
-        <span class="tag-soon">Em breve</span>
+        <div id="stravaActions" style="width:100%">
+          <button onclick="connectStrava()" class="btn btn-outline" style="padding:10px">🔗 Conectar Strava</button>
+        </div>
       </div>
       <div class="integration-item">
         <div class="integration-icon">📊</div>
@@ -679,7 +684,7 @@ select.form-input { cursor: pointer; }
         </div>
       </div>
       <p style="font-size:12px;color:var(--text2);text-align:center;margin-top:8px">
-        Garmin e Google Sheets em breve!
+        Google Sheets em breve!
       </p>
     </div>
 
@@ -929,6 +934,167 @@ const WORKOUT_KCAL = {
 const WORKOUT_ICONS = {
   musculacao:'🏋️', corrida:'🏃', pilates:'🧘', bicicleta:'🚴', caminhada:'🐕', outro:'⚡'
 };
+
+// ═══════════════════════════════════════════════════════
+//  STRAVA
+// ═══════════════════════════════════════════════════════
+const STRAVA_CLIENT_ID = '238497';
+const STRAVA_CLIENT_SECRET = '30a37a63f5d67256254f7bf9e9fd790c62363110';
+const STRAVA_REDIRECT_URI = 'https://jerogues2.github.io/fitcouple/';
+const STRAVA_TYPE_MAP = {
+  Run:'corrida', VirtualRun:'corrida', TrailRun:'corrida',
+  Ride:'bicicleta', VirtualRide:'bicicleta', EBikeRide:'bicicleta',
+  Walk:'caminhada', Hike:'caminhada',
+  WeightTraining:'musculacao', Workout:'musculacao', Crossfit:'musculacao', Elliptical:'musculacao',
+  Yoga:'pilates', Pilates:'pilates',
+};
+
+function connectStrava() {
+  localStorage.setItem('strava_pending_user', currentUser);
+  const url = `https://www.strava.com/oauth/authorize?client_id=${STRAVA_CLIENT_ID}&redirect_uri=${encodeURIComponent(STRAVA_REDIRECT_URI)}&response_type=code&scope=activity:read_all&approval_prompt=auto`;
+  window.location.href = url;
+}
+
+function disconnectStrava() {
+  if (!confirm('Desconectar Strava? Os treinos já importados ficam salvos.')) return;
+  delete state[currentUser].stravaTokens;
+  saveState();
+  renderStravaStatus();
+}
+
+async function exchangeStravaCode(code, userId) {
+  try {
+    const resp = await fetch('https://www.strava.com/oauth/token', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({
+        client_id: STRAVA_CLIENT_ID,
+        client_secret: STRAVA_CLIENT_SECRET,
+        code,
+        grant_type: 'authorization_code'
+      })
+    });
+    const data = await resp.json();
+    if (!resp.ok || !data.access_token) throw new Error(data.message || 'Erro de autenticação');
+
+    state[userId].stravaTokens = {
+      access_token: data.access_token,
+      refresh_token: data.refresh_token,
+      expires_at: data.expires_at,
+      athlete: {
+        id: data.athlete?.id,
+        name: `${data.athlete?.firstname||''} ${data.athlete?.lastname||''}`.trim()
+      }
+    };
+    saveState();
+    renderStravaStatus();
+    renderDashboard();
+    alert(`✅ Strava conectado! Olá, ${data.athlete?.firstname||'atleta'}!\nClique em "Sincronizar hoje" para importar seus treinos.`);
+  } catch(e) {
+    alert('❌ Erro ao conectar Strava: ' + (e.message || 'Tente novamente.'));
+  }
+}
+
+async function getStravaAccessToken(userId) {
+  const t = state[userId]?.stravaTokens;
+  if (!t) return null;
+  const now = Math.floor(Date.now() / 1000);
+  if (t.expires_at > now + 60) return t.access_token;
+  // Refresh automático
+  try {
+    const resp = await fetch('https://www.strava.com/oauth/token', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({
+        client_id: STRAVA_CLIENT_ID,
+        client_secret: STRAVA_CLIENT_SECRET,
+        refresh_token: t.refresh_token,
+        grant_type: 'refresh_token'
+      })
+    });
+    const data = await resp.json();
+    if (!resp.ok || !data.access_token) throw new Error('Refresh falhou');
+    t.access_token = data.access_token;
+    t.expires_at = data.expires_at;
+    if (data.refresh_token) t.refresh_token = data.refresh_token;
+    saveState();
+    return data.access_token;
+  } catch(e) {
+    return t.access_token; // tenta com token atual
+  }
+}
+
+async function syncStravaActivities() {
+  const btn = document.getElementById('stravaSyncBtn');
+  if (btn) { btn.textContent = '⏳ Sincronizando...'; btn.disabled = true; }
+  try {
+    const token = await getStravaAccessToken(currentUser);
+    if (!token) { alert('Strava não conectado.'); return; }
+
+    const midnight = new Date(); midnight.setHours(0,0,0,0);
+    const after = Math.floor(midnight.getTime() / 1000);
+    const resp = await fetch(
+      `https://www.strava.com/api/v3/athlete/activities?per_page=20&after=${after}`,
+      { headers: {'Authorization': `Bearer ${token}`} }
+    );
+    const activities = await resp.json();
+    if (!resp.ok) throw new Error(activities.message || 'Erro na API Strava');
+
+    if (!activities.length) {
+      alert('Nenhuma atividade encontrada hoje no Strava.\nSe treinou agora, aguarde a sincronização do Garmin (pode levar alguns minutos) e tente novamente.');
+      return;
+    }
+
+    const dk = todayKey();
+    const day = getDay(dk);
+    let added = 0;
+    activities.forEach(act => {
+      if (day.workouts.some(w => w.stravaId === act.id)) return; // já importado
+      const type = STRAVA_TYPE_MAP[act.type] || 'outro';
+      const duration = Math.round((act.moving_time || 0) / 60);
+      const kcal = (act.calories > 0)
+        ? act.calories
+        : Math.round(duration * (WORKOUT_KCAL[type] || 5) * ((user().profile.weight || 75) / 75));
+      day.workouts.push({ type, desc: act.name, duration, kcal, stravaId: act.id, source: 'strava' });
+      added++;
+    });
+
+    if (added > 0) {
+      saveState();
+      renderDashboard();
+      if (document.getElementById('screen-workout').classList.contains('active')) renderWorkoutScreen();
+      alert(`✅ ${added} atividade(s) importada(s) do Strava!`);
+    } else {
+      alert('Todas as atividades de hoje já estavam sincronizadas.');
+    }
+  } catch(e) {
+    alert('❌ Erro ao sincronizar: ' + (e.message || 'Verifique a internet.'));
+  } finally {
+    if (btn) { btn.textContent = '🔄 Sincronizar hoje'; btn.disabled = false; }
+  }
+}
+
+function renderStravaStatus() {
+  const tokens = state[currentUser]?.stravaTokens;
+  const connected = !!(tokens?.access_token);
+  const badge = document.getElementById('stravaStatusBadge');
+  const status = document.getElementById('stravaStatus');
+  const actions = document.getElementById('stravaActions');
+  if (!badge || !status || !actions) return;
+
+  if (connected) {
+    const name = tokens.athlete?.name || 'Atleta';
+    badge.innerHTML = '<span style="font-size:10px;color:var(--green);font-weight:700;background:var(--green-dim);border-radius:6px;padding:2px 6px">✅ Conectado</span>';
+    status.textContent = 'Conectado · ' + name;
+    actions.innerHTML = `
+      <button id="stravaSyncBtn" onclick="syncStravaActivities()" class="btn btn-green" style="margin-bottom:8px">🔄 Sincronizar hoje</button>
+      <button onclick="disconnectStrava()" style="width:100%;background:none;border:1px solid var(--red);border-radius:var(--radius-sm);padding:10px;color:var(--red);font-size:13px;font-weight:600;cursor:pointer">Desconectar</button>`;
+  } else {
+    badge.innerHTML = '<span class="tag-soon">Desconectado</span>';
+    status.textContent = 'Conecte para importar seus treinos';
+    actions.innerHTML = '<button onclick="connectStrava()" class="btn btn-outline" style="padding:10px">🔗 Conectar Strava</button>';
+  }
+}
 
 // ═══════════════════════════════════════════════════════
 //  STATE
@@ -1915,6 +2081,7 @@ function renderProfileScreen() {
   document.getElementById('pf_gender').value = prof.gender;
   document.getElementById('pf_activity').value = prof.activity;
   document.getElementById('pf_deficit').value = prof.deficit;
+  renderStravaStatus();
 }
 
 function saveProfile() {
@@ -1960,31 +2127,60 @@ document.getElementById('workoutModal').addEventListener('click', function(e) {
 // ═══════════════════════════════════════════════════════
 loadState();
 
-// Suporte a links diretos: ?user=thomaz ou ?user=jessica
-const _urlParams = new URLSearchParams(window.location.search);
-const _urlUser = _urlParams.get('user');
+(async () => {
+  const _urlParams = new URLSearchParams(window.location.search);
+  const _stravaCode = _urlParams.get('code');
+  const _stravaScope = _urlParams.get('scope') || '';
+  const _urlUser = _urlParams.get('user');
+  const thomazReady = state.thomaz.profile.setup;
+  const jessicaReady = state.jessica.profile.setup;
 
-const thomazReady = state.thomaz.profile.setup;
-const jessicaReady = state.jessica.profile.setup;
+  // ── Callback do OAuth Strava ──
+  if (_stravaCode && _stravaScope.includes('activity')) {
+    const pendingUser = localStorage.getItem('strava_pending_user') || (thomazReady ? 'thomaz' : 'jessica');
+    localStorage.removeItem('strava_pending_user');
+    window.history.replaceState({}, '', window.location.pathname);
 
-if (_urlUser === 'thomaz' || _urlUser === 'jessica') {
-  // Link direto para um usuário específico
-  if (state[_urlUser].profile.setup) {
-    // Perfil já configurado → abre direto no app
-    currentUser = _urlUser;
+    // Determina qual usuário lançar o app
+    currentUser = state[pendingUser]?.profile?.setup ? pendingUser
+      : thomazReady ? 'thomaz'
+      : jessicaReady ? 'jessica'
+      : null;
+    if (!currentUser) { document.getElementById('setupScreen').classList.add('active'); return; }
+
+    launchApp();
+    // Navega direto pro Perfil para mostrar o status do Strava
+    document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+    document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+    document.getElementById('screen-profile').classList.add('active');
+    document.querySelector('.nav-item:last-child').classList.add('active');
+    renderProfileScreen();
+    await exchangeStravaCode(_stravaCode, pendingUser);
+    return;
+  }
+
+  // ── Erro OAuth (usuário cancelou no Strava) ──
+  if (_urlParams.get('error')) {
+    localStorage.removeItem('strava_pending_user');
+    window.history.replaceState({}, '', window.location.pathname);
+  }
+
+  // ── Init normal ──
+  if (_urlUser === 'thomaz' || _urlUser === 'jessica') {
+    if (state[_urlUser].profile.setup) {
+      currentUser = _urlUser;
+      launchApp();
+    } else {
+      document.getElementById('setupScreen').classList.add('active');
+      setTimeout(() => pickUser(_urlUser), 100);
+    }
+  } else if (thomazReady || jessicaReady) {
+    currentUser = thomazReady ? 'thomaz' : 'jessica';
     launchApp();
   } else {
-    // Perfil ainda não configurado → abre setup pré-selecionando esse usuário
     document.getElementById('setupScreen').classList.add('active');
-    setTimeout(() => pickUser(_urlUser), 100);
   }
-} else if (thomazReady || jessicaReady) {
-  currentUser = thomazReady ? 'thomaz' : 'jessica';
-  launchApp();
-} else {
-  // Mostrar tela de setup
-  document.getElementById('setupScreen').classList.add('active');
-}
+})();
 </script>
 </body>
 </html>                                                                                       
