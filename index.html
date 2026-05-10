@@ -512,6 +512,28 @@ select.form-input { cursor: pointer; }
       </div>
     </div>
 
+    <div class="card">
+      <div class="card-title flex-between">
+        💧 Água
+        <span id="waterPct" style="color:var(--blue);font-weight:700;font-size:13px">0%</span>
+      </div>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+        <div>
+          <span id="waterAmount" style="font-size:28px;font-weight:800;color:var(--blue)">0</span>
+          <span id="waterGoalLabel" style="font-size:13px;color:var(--text2)"> / — ml</span>
+        </div>
+        <button onclick="resetWater()" style="background:none;border:none;color:var(--text3);font-size:12px;cursor:pointer;padding:4px">Zerar</button>
+      </div>
+      <div style="height:8px;background:var(--card2);border-radius:4px;overflow:hidden;margin-bottom:12px">
+        <div id="waterBar" style="height:100%;background:var(--blue);border-radius:4px;width:0%;transition:width .4s ease"></div>
+      </div>
+      <div style="display:flex;gap:8px">
+        <button onclick="addWater(200)" style="flex:1;padding:10px;background:none;border:1.5px solid var(--blue);border-radius:var(--radius-sm);color:var(--blue);font-size:13px;font-weight:700;cursor:pointer">+200ml</button>
+        <button onclick="addWater(300)" style="flex:1;padding:10px;background:none;border:1.5px solid var(--blue);border-radius:var(--radius-sm);color:var(--blue);font-size:13px;font-weight:700;cursor:pointer">+300ml</button>
+        <button onclick="addWater(500)" style="flex:1;padding:10px;background:none;border:1.5px solid var(--blue);border-radius:var(--radius-sm);color:var(--blue);font-size:13px;font-weight:700;cursor:pointer">+500ml</button>
+      </div>
+    </div>
+
     <div class="card" id="dashActivitiesCard">
       <div class="card-title flex-between">Atividades de hoje <button class="btn btn-outline" style="width:auto;padding:4px 12px;font-size:12px" onclick="openWorkoutModal()">+ Add</button></div>
       <div class="activity-list" id="dashActivities">
@@ -523,28 +545,6 @@ select.form-input { cursor: pointer; }
       <div class="card-title flex-between">Refeições de hoje <button class="btn btn-outline" style="width:auto;padding:4px 12px;font-size:12px" onclick="goToFood()">Ver todas</button></div>
       <div id="dashMealsSummary">
         <div style="color:var(--text2);font-size:13px">Nenhuma refeição registrada</div>
-      </div>
-    </div>
-
-    <div class="card">
-      <div class="card-title flex-between">
-        💧 Água
-        <span id="waterPct" style="color:var(--blue);font-weight:700;font-size:13px">0%</span>
-      </div>
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
-        <div>
-          <span id="waterAmount" style="font-size:28px;font-weight:800;color:var(--blue)">0</span>
-          <span style="font-size:13px;color:var(--text2)"> / 2500 ml</span>
-        </div>
-        <button onclick="resetWater()" style="background:none;border:none;color:var(--text3);font-size:12px;cursor:pointer;padding:4px">Zerar</button>
-      </div>
-      <div style="height:8px;background:var(--card2);border-radius:4px;overflow:hidden;margin-bottom:12px">
-        <div id="waterBar" style="height:100%;background:var(--blue);border-radius:4px;width:0%;transition:width .4s ease"></div>
-      </div>
-      <div style="display:flex;gap:8px">
-        <button onclick="addWater(200)" style="flex:1;padding:10px;background:none;border:1.5px solid var(--blue);border-radius:var(--radius-sm);color:var(--blue);font-size:13px;font-weight:700;cursor:pointer">+200ml</button>
-        <button onclick="addWater(300)" style="flex:1;padding:10px;background:none;border:1.5px solid var(--blue);border-radius:var(--radius-sm);color:var(--blue);font-size:13px;font-weight:700;cursor:pointer">+300ml</button>
-        <button onclick="addWater(500)" style="flex:1;padding:10px;background:none;border:1.5px solid var(--blue);border-radius:var(--radius-sm);color:var(--blue);font-size:13px;font-weight:700;cursor:pointer">+500ml</button>
       </div>
     </div>
   </div>
@@ -566,6 +566,16 @@ select.form-input { cursor: pointer; }
 
   <!-- WORKOUT SCREEN -->
   <div class="screen" id="screen-workout">
+    <div class="card" id="stravaSyncCard" style="display:none">
+      <div style="display:flex;align-items:center;gap:12px">
+        <div style="font-size:24px">🏃</div>
+        <div style="flex:1">
+          <div style="font-size:14px;font-weight:700">Strava conectado</div>
+          <div style="font-size:12px;color:var(--text2)">Importe os treinos do Garmin de hoje</div>
+        </div>
+        <button id="stravaSyncBtnWorkout" onclick="syncStravaActivities()" style="background:var(--green);border:none;border-radius:var(--radius-sm);padding:8px 14px;color:#000;font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap">🔄 Sincronizar</button>
+      </div>
+    </div>
     <div class="card">
       <div class="card-title flex-between">Treino de hoje <button class="btn btn-green" style="width:auto;padding:6px 14px;font-size:13px" onclick="openWorkoutModal()">+ Registrar</button></div>
       <div id="workoutTodaySummary">
@@ -972,8 +982,10 @@ const WORKOUT_ICONS = {
 // ═══════════════════════════════════════════════════════
 //  STRAVA
 // ═══════════════════════════════════════════════════════
-const STRAVA_CLIENT_ID = '238497';
-const STRAVA_CLIENT_SECRET = '30a37a63f5d67256254f7bf9e9fd790c62363110';
+const STRAVA_CREDS = {
+  thomaz: { id: '238497',  secret: '30a37a63f5d67256254f7bf9e9fd790c62363110' },
+  jessica: { id: '238760', secret: 'a8e03b03659bc230d14d011978c5bac7b2ad513b' },
+};
 const STRAVA_REDIRECT_URI = 'https://jerogues2.github.io/fitcouple/';
 const STRAVA_TYPE_MAP = {
   Run:'corrida', VirtualRun:'corrida', TrailRun:'corrida',
@@ -984,8 +996,10 @@ const STRAVA_TYPE_MAP = {
 };
 
 function connectStrava() {
+  const creds = STRAVA_CREDS[currentUser];
+  if (!creds) { alert('Credenciais Strava não encontradas para este usuário.'); return; }
   localStorage.setItem('strava_pending_user', currentUser);
-  const url = `https://www.strava.com/oauth/authorize?client_id=${STRAVA_CLIENT_ID}&redirect_uri=${encodeURIComponent(STRAVA_REDIRECT_URI)}&response_type=code&scope=activity:read_all&approval_prompt=auto`;
+  const url = `https://www.strava.com/oauth/authorize?client_id=${creds.id}&redirect_uri=${encodeURIComponent(STRAVA_REDIRECT_URI)}&response_type=code&scope=activity:read_all&approval_prompt=auto`;
   window.location.href = url;
 }
 
@@ -997,13 +1011,14 @@ function disconnectStrava() {
 }
 
 async function exchangeStravaCode(code, userId) {
+  const creds = STRAVA_CREDS[userId] || STRAVA_CREDS.thomaz;
   try {
     const resp = await fetch('https://www.strava.com/oauth/token', {
       method: 'POST',
       headers: {'Content-Type':'application/json'},
       body: JSON.stringify({
-        client_id: STRAVA_CLIENT_ID,
-        client_secret: STRAVA_CLIENT_SECRET,
+        client_id: creds.id,
+        client_secret: creds.secret,
         code,
         grant_type: 'authorization_code'
       })
@@ -1035,13 +1050,14 @@ async function getStravaAccessToken(userId) {
   const now = Math.floor(Date.now() / 1000);
   if (t.expires_at > now + 60) return t.access_token;
   // Refresh automático
+  const creds = STRAVA_CREDS[userId] || STRAVA_CREDS.thomaz;
   try {
     const resp = await fetch('https://www.strava.com/oauth/token', {
       method: 'POST',
       headers: {'Content-Type':'application/json'},
       body: JSON.stringify({
-        client_id: STRAVA_CLIENT_ID,
-        client_secret: STRAVA_CLIENT_SECRET,
+        client_id: creds.id,
+        client_secret: creds.secret,
         refresh_token: t.refresh_token,
         grant_type: 'refresh_token'
       })
@@ -1060,7 +1076,9 @@ async function getStravaAccessToken(userId) {
 
 async function syncStravaActivities() {
   const btn = document.getElementById('stravaSyncBtn');
+  const btnW = document.getElementById('stravaSyncBtnWorkout');
   if (btn) { btn.textContent = '⏳ Sincronizando...'; btn.disabled = true; }
+  if (btnW) { btnW.textContent = '⏳ Sincronizando...'; btnW.disabled = true; }
   try {
     const token = await getStravaAccessToken(currentUser);
     if (!token) { alert('Strava não conectado.'); return; }
@@ -1105,6 +1123,7 @@ async function syncStravaActivities() {
     alert('❌ Erro ao sincronizar: ' + (e.message || 'Verifique a internet.'));
   } finally {
     if (btn) { btn.textContent = '🔄 Sincronizar hoje'; btn.disabled = false; }
+    if (btnW) { btnW.textContent = '🔄 Sincronizar'; btnW.disabled = false; }
   }
 }
 
@@ -1918,7 +1937,18 @@ function deleteWorkout(index) {
   renderWorkoutScreen();
 }
 
+function renderStravaWorkoutCard() {
+  const card = document.getElementById('stravaSyncCard');
+  if (!card) return;
+  const connected = !!(state[currentUser]?.stravaTokens?.access_token);
+  card.style.display = connected ? 'block' : 'none';
+  // Reutiliza a mesma função syncStravaActivities, mas atualiza o botão correto
+  const btn = document.getElementById('stravaSyncBtnWorkout');
+  if (btn) btn.onclick = syncStravaActivities;
+}
+
 function renderWorkoutScreen() {
+  renderStravaWorkoutCard();
   const today = todayKey();
   const day = getDay(today);
   const sumEl = document.getElementById('workoutTodaySummary');
@@ -2172,15 +2202,21 @@ function resetWater() {
   renderWaterCard();
 }
 
+function waterGoal() {
+  return Math.round((user().profile.weight || 70) * 35);
+}
+
 function renderWaterCard() {
   const water = getDay(todayKey()).water || 0;
-  const goal = 2500;
+  const goal = waterGoal();
   const pct = Math.min(Math.round(water / goal * 100), 100);
   const amtEl = document.getElementById('waterAmount');
   const barEl = document.getElementById('waterBar');
   const pctEl = document.getElementById('waterPct');
+  const goalLabel = document.getElementById('waterGoalLabel');
   if (!amtEl) return;
   amtEl.textContent = water;
+  if (goalLabel) goalLabel.textContent = ` / ${goal} ml`;
   barEl.style.width = pct + '%';
   if (water >= goal) {
     pctEl.textContent = '✅ Meta!';
