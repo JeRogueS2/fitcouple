@@ -720,15 +720,13 @@ select.form-input { cursor: pointer; }
   <div class="modal">
     <div class="modal-handle"></div>
     <div class="modal-title">Adicionar alimento</div>
+    <input type="text" class="search-input" id="foodSearchInput" placeholder="🔍  Buscar alimento..." oninput="searchFood(this.value)" style="margin-bottom:8px">
     <div style="display:flex;gap:8px;margin-bottom:10px">
-      <input type="text" class="search-input" id="foodSearchInput" placeholder="🔍  Buscar alimento..." oninput="searchFood(this.value)" style="margin-bottom:0;flex:1">
-      <button onclick="openBarcodeScanner()" style="background:var(--card2);border:1.5px solid var(--border);border-radius:var(--radius-sm);padding:0 14px;font-size:22px;cursor:pointer;flex-shrink:0;transition:background .2s" title="Escanear código de barras">📷</button>
+      <button onclick="openBarcodeScanner()" style="flex:1;background:var(--card2);border:1.5px solid var(--border);border-radius:var(--radius-sm);padding:10px;font-size:13px;font-weight:600;color:var(--text2);cursor:pointer;transition:background .2s">📷 Código de barras</button>
+      <button onclick="openFoodPhotoScanner()" id="photoAIBtn" style="flex:1;background:var(--purple-dim);border:1.5px solid var(--purple);border-radius:var(--radius-sm);padding:10px;font-size:13px;font-weight:600;color:var(--purple);cursor:pointer">🍽️ Foto do prato</button>
     </div>
     <input type="file" id="barcodeFileInput" accept="image/*" capture="environment" style="display:none" onchange="handleBarcodeImage(this)">
     <input type="file" id="foodPhotoInput" accept="image/*" capture="environment" style="display:none" onchange="handleFoodPhoto(this)">
-    <button onclick="openFoodPhotoScanner()" id="photoAIBtn" style="width:100%;background:var(--purple-dim);border:1.5px solid var(--purple);border-radius:var(--radius-sm);padding:10px;color:var(--purple);font-size:13px;font-weight:600;cursor:pointer;margin-bottom:10px;display:none">
-      📸 Analisar foto do prato com IA
-    </button>
     <div class="search-results" id="foodSearchResults"></div>
     <div id="foodCustomSection" style="display:none">
       <div class="section-divider"></div>
@@ -1405,7 +1403,7 @@ function updateGeminiUI() {
     ? '<span style="font-size:10px;color:var(--green);font-weight:700;background:var(--green-dim);border-radius:6px;padding:2px 6px">✅ Ativo</span>'
     : '<span class="tag-soon">Inativo</span>';
   if (status) status.textContent = active ? 'Gemini Flash ativo — analisando fotos' : 'Cole sua chave do Google Gemini abaixo';
-  if (btn) btn.style.display = active ? 'block' : 'none';
+  // btn always visible now
   const input = document.getElementById('geminiKeyInput');
   if (input && active) input.value = key.slice(0,8) + '••••••••••••';
 }
@@ -1989,4 +1987,4 @@ if (_urlUser === 'thomaz' || _urlUser === 'jessica') {
 }
 </script>
 </body>
-</html>
+</html>                                                                                       
