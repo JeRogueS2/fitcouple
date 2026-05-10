@@ -525,6 +525,28 @@ select.form-input { cursor: pointer; }
         <div style="color:var(--text2);font-size:13px">Nenhuma refeição registrada</div>
       </div>
     </div>
+
+    <div class="card">
+      <div class="card-title flex-between">
+        💧 Água
+        <span id="waterPct" style="color:var(--blue);font-weight:700;font-size:13px">0%</span>
+      </div>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+        <div>
+          <span id="waterAmount" style="font-size:28px;font-weight:800;color:var(--blue)">0</span>
+          <span style="font-size:13px;color:var(--text2)"> / 2500 ml</span>
+        </div>
+        <button onclick="resetWater()" style="background:none;border:none;color:var(--text3);font-size:12px;cursor:pointer;padding:4px">Zerar</button>
+      </div>
+      <div style="height:8px;background:var(--card2);border-radius:4px;overflow:hidden;margin-bottom:12px">
+        <div id="waterBar" style="height:100%;background:var(--blue);border-radius:4px;width:0%;transition:width .4s ease"></div>
+      </div>
+      <div style="display:flex;gap:8px">
+        <button onclick="addWater(200)" style="flex:1;padding:10px;background:none;border:1.5px solid var(--blue);border-radius:var(--radius-sm);color:var(--blue);font-size:13px;font-weight:700;cursor:pointer">+200ml</button>
+        <button onclick="addWater(300)" style="flex:1;padding:10px;background:none;border:1.5px solid var(--blue);border-radius:var(--radius-sm);color:var(--blue);font-size:13px;font-weight:700;cursor:pointer">+300ml</button>
+        <button onclick="addWater(500)" style="flex:1;padding:10px;background:none;border:1.5px solid var(--blue);border-radius:var(--radius-sm);color:var(--blue);font-size:13px;font-weight:700;cursor:pointer">+500ml</button>
+      </div>
+    </div>
   </div>
 
   <!-- FOOD SCREEN -->
@@ -577,6 +599,13 @@ select.form-input { cursor: pointer; }
     <div class="card">
       <div class="card-title">Calorias — 7 dias</div>
       <div class="chart-wrap"><canvas id="calChart"></canvas></div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">📋 Semana atual</div>
+      <div id="weeklySummaryContent">
+        <div class="empty-state"><p>Registre refeições e treinos para ver o resumo</p></div>
+      </div>
     </div>
 
     <div class="card">
@@ -732,6 +761,11 @@ select.form-input { cursor: pointer; }
     </div>
     <input type="file" id="barcodeFileInput" accept="image/*" capture="environment" style="display:none" onchange="handleBarcodeImage(this)">
     <input type="file" id="foodPhotoInput" accept="image/*" capture="environment" style="display:none" onchange="handleFoodPhoto(this)">
+    <div id="favoritesSection" style="display:none;margin-bottom:6px">
+      <div style="font-size:11px;color:var(--text2);font-weight:700;text-transform:uppercase;letter-spacing:.4px;margin-bottom:6px">⭐ Favoritos</div>
+      <div id="favoritesList"></div>
+      <div style="height:1px;background:var(--border);margin:8px 0 4px"></div>
+    </div>
     <div class="search-results" id="foodSearchResults"></div>
     <div id="foodCustomSection" style="display:none">
       <div class="section-divider"></div>
@@ -1132,6 +1166,7 @@ function defaultUserState(id) {
     },
     days: {},
     weightLog: [],
+    favorites: [],
   };
 }
 
@@ -1144,8 +1179,10 @@ function getDay(dateKey) {
       meals: MEALS.map(name => ({name, items:[]})),
       workouts: [],
       weight: null,
+      water: 0,
     };
   }
+  if (u.days[dateKey].water === undefined) u.days[dateKey].water = 0;
   return u.days[dateKey];
 }
 
@@ -1373,6 +1410,9 @@ function renderDashboard() {
       </div>`).join('');
   }
 
+  // Water
+  renderWaterCard();
+
   // Meals summary
   const msEl = document.getElementById('dashMealsSummary');
   const loggedMeals = day.meals.filter(m => m.items.length > 0);
@@ -1449,6 +1489,7 @@ function openFoodModal(mealIndex) {
   document.getElementById('foodSearchInput').value = '';
   document.getElementById('foodSearchResults').innerHTML = '';
   document.getElementById('foodCustomSection').style.display = 'none';
+  renderFavoritesSection();
   renderLocalFoodSearch('');
 }
 
@@ -1536,9 +1577,12 @@ function renderSearchResults(results) {
         <div class="sri-name" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${f.name}</div>
         <div class="sri-macros">P: ${f.p}g · C: ${f.c}g · G: ${f.f}g <small>(por 100g)</small></div>
       </div>
-      <div style="text-align:right;flex-shrink:0;margin-left:8px">
-        <div class="sri-cal">${f.cal} kcal</div>
-        ${f.source === 'api' ? '<div style="font-size:10px;color:var(--text3);margin-top:2px">Open Food Facts</div>' : ''}
+      <div style="display:flex;align-items:center;gap:6px;flex-shrink:0;margin-left:8px">
+        <div style="text-align:right">
+          <div class="sri-cal">${f.cal} kcal</div>
+          ${f.source === 'api' ? '<div style="font-size:10px;color:var(--text3);margin-top:2px">Open Food Facts</div>' : ''}
+        </div>
+        <button data-fav-id="${f.id}" onclick="toggleFavorite('${f.id}',${i},event)" style="background:none;border:none;font-size:18px;cursor:pointer;padding:2px;line-height:1">${isFavorite(f.id) ? '❤️' : '🤍'}</button>
       </div>
     </div>`).join('');
 }
@@ -1967,6 +2011,7 @@ function renderCouplePanel() {
 
 function renderProgressScreen() {
   renderCouplePanel();
+  renderWeeklySummary();
   const wl = user().weightLog;
   const histEl = document.getElementById('weightHistoryList');
   if (wl.length === 0) {
@@ -2107,6 +2152,172 @@ function clearTodayData() {
   renderFoodScreen();
   renderWorkoutScreen();
   alert('Dados de hoje apagados.');
+}
+
+// ═══════════════════════════════════════════════════════
+//  ÁGUA
+// ═══════════════════════════════════════════════════════
+function addWater(ml) {
+  const dk = todayKey();
+  const day = getDay(dk);
+  day.water = (day.water || 0) + ml;
+  saveState();
+  renderWaterCard();
+}
+
+function resetWater() {
+  if (!confirm('Zerar o contador de água?')) return;
+  getDay(todayKey()).water = 0;
+  saveState();
+  renderWaterCard();
+}
+
+function renderWaterCard() {
+  const water = getDay(todayKey()).water || 0;
+  const goal = 2500;
+  const pct = Math.min(Math.round(water / goal * 100), 100);
+  const amtEl = document.getElementById('waterAmount');
+  const barEl = document.getElementById('waterBar');
+  const pctEl = document.getElementById('waterPct');
+  if (!amtEl) return;
+  amtEl.textContent = water;
+  barEl.style.width = pct + '%';
+  if (water >= goal) {
+    pctEl.textContent = '✅ Meta!';
+    pctEl.style.color = 'var(--green)';
+    barEl.style.background = 'var(--green)';
+  } else {
+    pctEl.textContent = pct + '%';
+    pctEl.style.color = 'var(--blue)';
+    barEl.style.background = 'var(--blue)';
+  }
+}
+
+// ═══════════════════════════════════════════════════════
+//  FAVORITOS
+// ═══════════════════════════════════════════════════════
+function isFavorite(foodId) {
+  return (user().favorites || []).some(f => String(f.id) === String(foodId));
+}
+
+function toggleFavorite(foodId, index, event) {
+  event.stopPropagation();
+  if (!user().favorites) user().favorites = [];
+  const favs = user().favorites;
+  const existing = favs.findIndex(f => String(f.id) === String(foodId));
+  if (existing >= 0) {
+    favs.splice(existing, 1);
+  } else {
+    const food = currentSearchResults[index];
+    if (food) favs.push({...food});
+  }
+  saveState();
+  renderFavoritesSection();
+  // Atualiza o ícone no resultado
+  const btn = document.querySelector(`[data-fav-id="${foodId}"]`);
+  if (btn) btn.textContent = isFavorite(foodId) ? '❤️' : '🤍';
+}
+
+function renderFavoritesSection() {
+  const favs = user().favorites || [];
+  const section = document.getElementById('favoritesSection');
+  const list = document.getElementById('favoritesList');
+  if (!section || !list) return;
+  if (favs.length === 0) { section.style.display = 'none'; return; }
+  section.style.display = 'block';
+  list.innerHTML = favs.map((f, i) => `
+    <div class="search-result-item" onclick="selectFavorite(${i})">
+      <div style="flex:1;min-width:0">
+        <div class="sri-name" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${f.name}</div>
+        <div class="sri-macros">P: ${f.p}g · C: ${f.c}g · G: ${f.f}g</div>
+      </div>
+      <div style="display:flex;align-items:center;gap:6px;flex-shrink:0;margin-left:8px">
+        <div class="sri-cal">${f.cal} kcal</div>
+        <button onclick="removeFavorite(${i},event)" style="background:none;border:none;font-size:18px;cursor:pointer;padding:2px;line-height:1">❤️</button>
+      </div>
+    </div>`).join('');
+}
+
+function selectFavorite(index) {
+  pendingFood = (user().favorites || [])[index];
+  if (!pendingFood) return;
+  closeFoodModal();
+  openFoodQtyModal();
+}
+
+function removeFavorite(index, event) {
+  event.stopPropagation();
+  if (!user().favorites) return;
+  user().favorites.splice(index, 1);
+  saveState();
+  renderFavoritesSection();
+}
+
+// ═══════════════════════════════════════════════════════
+//  RESUMO SEMANAL
+// ═══════════════════════════════════════════════════════
+function renderWeeklySummary() {
+  const el = document.getElementById('weeklySummaryContent');
+  if (!el) return;
+  const u = user();
+  const goal = calcGoal(u.profile);
+
+  const days = [];
+  for (let i = 6; i >= 0; i--) {
+    const d = new Date(); d.setDate(d.getDate() - i);
+    days.push(d.toISOString().slice(0, 10));
+  }
+
+  let totalCal = 0, totalBurned = 0, workoutDays = 0, loggedDays = 0;
+  const dayData = days.map(dk => {
+    const day = u.days[dk];
+    if (!day) return { dk, cal: 0, burned: 0, workouts: 0 };
+    let cal = 0;
+    day.meals?.forEach(m => m.items?.forEach(it => { cal += it.cal; }));
+    cal = Math.round(cal);
+    const burned = day.workouts?.reduce((s, w) => s + (w.kcal || 0), 0) || 0;
+    const workouts = day.workouts?.length || 0;
+    if (cal > 0) loggedDays++;
+    if (workouts > 0) workoutDays++;
+    totalCal += cal;
+    totalBurned += burned;
+    return { dk, cal, burned, workouts };
+  });
+
+  const avgCal = loggedDays > 0 ? Math.round(totalCal / loggedDays) : 0;
+  const totalDeficit = loggedDays > 0 ? (goal * loggedDays - totalCal + totalBurned) : 0;
+
+  el.innerHTML = `
+    <div class="stat-row" style="margin-bottom:14px">
+      <div class="stat-box">
+        <div class="stat-value blue">${workoutDays}</div>
+        <div class="stat-label">💪 Treinos</div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-value orange">${avgCal || '—'}</div>
+        <div class="stat-label">🍽️ Média kcal</div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-value ${totalDeficit >= 0 ? 'green' : 'red'}">${loggedDays > 0 ? Math.abs(Math.round(totalDeficit)) : '—'}</div>
+        <div class="stat-label">${totalDeficit >= 0 ? '⚡ Déficit' : '⬆️ Superávit'}</div>
+      </div>
+    </div>
+    <div style="display:flex;gap:4px;align-items:flex-end;height:60px;margin-bottom:6px">
+      ${dayData.map(d => {
+        const label = new Date(d.dk + 'T12:00:00').toLocaleDateString('pt-BR', {weekday:'short'}).slice(0,3);
+        const pct = goal > 0 ? Math.min(d.cal / goal * 100, 100) : 0;
+        const color = d.cal > goal ? 'var(--red)' : d.cal > 0 ? 'var(--orange)' : 'var(--card2)';
+        return `
+          <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:3px">
+            <div style="font-size:10px;color:var(--text3)">${label}</div>
+            <div style="width:100%;background:var(--card2);border-radius:4px;height:40px;display:flex;align-items:flex-end;overflow:hidden">
+              <div style="width:100%;height:${pct}%;background:${color};transition:height .3s;min-height:${d.cal>0?'3px':'0'}"></div>
+            </div>
+            <div style="font-size:13px">${d.workouts > 0 ? '💪' : (d.cal > 0 ? '🍽️' : '·')}</div>
+          </div>`;
+      }).join('')}
+    </div>
+    <div style="font-size:11px;color:var(--text3);text-align:center">${loggedDays}/7 dias registrados · ${totalBurned} kcal queimadas na semana</div>`;
 }
 
 // ═══════════════════════════════════════════════════════
