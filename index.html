@@ -1100,16 +1100,40 @@ async function syncStravaActivities() {
     const dk = todayKey();
     const day = getDay(dk);
     let added = 0;
-    activities.forEach(act => {
-      if (day.workouts.some(w => w.stravaId === act.id)) return; // já importado
+    // DEBUG TEMPORÁRIO — remover após diagnóstico
+    const debugLines = activities.map(a =>
+      `[${a.type}] "${a.name}"\n  calories=${a.calories} | kilojoules=${a.kilojoules} | moving_time=${a.moving_time}s`
+    ).join('\n\n');
+    alert('🔍 DEBUG Strava API:\n\n' + debugLines);
+
+    for (const act of activities) {
+      if (day.workouts.some(w => w.stravaId === act.id)) continue; // já importado
       const type = STRAVA_TYPE_MAP[act.type] || 'outro';
       const duration = Math.round((act.moving_time || 0) / 60);
-      const kcal = (act.calories > 0)
-        ? act.calories
-        : Math.round(duration * (WORKOUT_KCAL[type] || 5) * ((user().profile.weight || 75) / 75));
+
+      // O endpoint de lista retorna SummaryActivity, que não inclui 'calories'
+      // para atividades sem GPS (ex: musculação). Buscamos o detalhe quando necessário.
+      let kcal = act.calories > 0 ? act.calories : 0;
+      if (!kcal) {
+        try {
+          const detailResp = await fetch(
+            `https://www.strava.com/api/v3/activities/${act.id}`,
+            { headers: {'Authorization': `Bearer ${token}`} }
+          );
+          if (detailResp.ok) {
+            const detail = await detailResp.json();
+            if (detail.calories > 0) kcal = detail.calories;
+          }
+        } catch(_) { /* ignora e usa fallback */ }
+      }
+      if (!kcal) {
+        // Fallback: estimativa pelo peso e duração
+        kcal = Math.round(duration * (WORKOUT_KCAL[type] || 5) * ((user().profile.weight || 75) / 75));
+      }
+
       day.workouts.push({ type, desc: act.name, duration, kcal, stravaId: act.id, source: 'strava' });
       added++;
-    });
+    }
 
     if (added > 0) {
       saveState();
