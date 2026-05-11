@@ -1100,12 +1100,6 @@ async function syncStravaActivities() {
     const dk = todayKey();
     const day = getDay(dk);
     let added = 0;
-    // DEBUG TEMPORÁRIO — remover após diagnóstico
-    const debugLines = activities.map(a =>
-      `[${a.type}] "${a.name}"\n  calories=${a.calories} | kilojoules=${a.kilojoules} | moving_time=${a.moving_time}s`
-    ).join('\n\n');
-    alert('🔍 DEBUG Strava API:\n\n' + debugLines);
-
     for (const act of activities) {
       if (day.workouts.some(w => w.stravaId === act.id)) continue; // já importado
       const type = STRAVA_TYPE_MAP[act.type] || 'outro';
