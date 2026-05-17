@@ -1884,10 +1884,23 @@ Se não houver alimentos visíveis: {"foods":[],"error":"motivo"}`;
     if (!resp || !resp.ok) throw new Error(lastError || 'Nenhum modelo disponível. Verifique sua chave Groq.');
 
     const text = data.choices?.[0]?.message?.content || '';
-    const jsonMatch = text.match(/\{[\s\S]*\}/);
+    // Remove markdown code blocks se existirem
+    const cleaned = text.replace(/```json\s*/gi, '').replace(/```\s*/g, '').trim();
+    const jsonMatch = cleaned.match(/\{[\s\S]*\}/);
     if (!jsonMatch) throw new Error('Resposta inválida da IA. Tente novamente.');
 
-    const result = JSON.parse(jsonMatch[0]);
+    let result;
+    try {
+      result = JSON.parse(jsonMatch[0]);
+    } catch(parseErr) {
+      // Tenta extrair só até o último } válido
+      let raw = jsonMatch[0];
+      while (raw.length > 2) {
+        try { result = JSON.parse(raw); break; } catch(e) { raw = raw.slice(0, raw.lastIndexOf('}')); raw += '}'; }
+        if (!raw.includes('{')) break;
+      }
+      if (!result) throw new Error('Não consegui interpretar a resposta da IA. Tente novamente.');
+    }
     if (result.error || !result.foods?.length) {
       el.innerHTML = `<div style="color:var(--text2);font-size:13px;text-align:center;padding:16px">🤔 ${result.error || 'Não consegui identificar alimentos. Tente uma foto mais clara.'}</div>`;
       return;
