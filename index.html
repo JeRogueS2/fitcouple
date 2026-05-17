@@ -769,8 +769,8 @@ select.form-input { cursor: pointer; }
       <button onclick="openBarcodeScanner()" style="flex:1;background:var(--card2);border:1.5px solid var(--border);border-radius:var(--radius-sm);padding:10px;font-size:13px;font-weight:600;color:var(--text2);cursor:pointer;transition:background .2s">📷 Código de barras</button>
       <button onclick="openFoodPhotoScanner()" id="photoAIBtn" style="flex:1;background:var(--purple-dim);border:1.5px solid var(--purple);border-radius:var(--radius-sm);padding:10px;font-size:13px;font-weight:600;color:var(--purple);cursor:pointer">🍽️ Foto do prato</button>
     </div>
-    <input type="file" id="barcodeFileInput" accept="image/*" capture="environment" style="display:none" onchange="handleBarcodeImage(this)">
-    <input type="file" id="foodPhotoInput" accept="image/*" capture="environment" style="display:none" onchange="handleFoodPhoto(this)">
+    <input type="file" id="barcodeFileInput" accept="image/*" capture style="display:none" onchange="handleBarcodeImage(this)">
+    <input type="file" id="foodPhotoInput" accept="image/*" capture style="display:none" onchange="handleFoodPhoto(this)">
     <div id="favoritesSection" style="display:none;margin-bottom:6px">
       <div style="font-size:11px;color:var(--text2);font-weight:700;text-transform:uppercase;letter-spacing:.4px;margin-bottom:6px">⭐ Favoritos</div>
       <div id="favoritesList"></div>
