@@ -825,12 +825,28 @@ select.form-input { cursor: pointer; }
   <div class="modal">
     <div class="modal-handle"></div>
     <div class="modal-title" id="fqmTitle">Porção</div>
-    <div class="form-group">
+    <div style="display:flex;gap:6px;margin-bottom:10px">
+      <button id="fqmUnitGrams" onclick="setFqmUnit('g')" style="flex:1;padding:8px;border-radius:8px;border:1.5px solid var(--green);background:var(--green-dim);color:var(--green);font-size:13px;font-weight:600;cursor:pointer">g / ml</button>
+      <button id="fqmUnitUnits" onclick="setFqmUnit('u')" style="flex:1;padding:8px;border-radius:8px;border:1.5px solid var(--border);background:none;color:var(--text2);font-size:13px;font-weight:600;cursor:pointer">unidade</button>
+    </div>
+    <div id="fqmGramsSection" class="form-group">
       <label class="form-label">Quantidade (g ou ml)</label>
-      <input type="number" class="form-input" id="fqmQty" placeholder="100" value="100">
+      <input type="number" class="form-input" id="fqmQty" placeholder="100" value="100" oninput="updateFoodQtyPreview()">
+    </div>
+    <div id="fqmUnitsSection" style="display:none">
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Nº de unidades</label>
+          <input type="number" class="form-input" id="fqmUnits" placeholder="1" value="1" oninput="updateFoodQtyPreview()">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Peso por unidade (g)</label>
+          <input type="number" class="form-input" id="fqmUnitWeight" placeholder="50" value="50" oninput="updateFoodQtyPreview()">
+        </div>
+      </div>
     </div>
     <div id="fqmPreview" style="font-size:13px;color:var(--text2);text-align:center;margin:10px 0;padding:10px;background:var(--card2);border-radius:8px"></div>
-    <button class="btn btn-green" onclick="confirmFoodQty()">Adicionar à refeição</button>
+    <button class="btn btn-green" id="fqmConfirmBtn" onclick="confirmFoodQty()">Adicionar à refeição</button>
     <div style="height:8px"></div>
     <button class="btn btn-outline" onclick="closeFoodQtyModal()">Voltar</button>
   </div>
@@ -964,7 +980,7 @@ const FOOD_DB = [
   {id:60,name:'Hambúrguer caseiro (150g)',cal:330,p:25,c:1,f:25},
 ];
 
-const MEALS = ['Café da manhã','Almoço','Lanche da tarde','Jantar','Ceia'];
+const MEALS = ['Café da manhã','Almoço','Lanche da tarde','Jantar'];
 
 const WORKOUT_KCAL = {
   musculacao: 6.5,  // kcal/min (estimativa para 80kg)
@@ -1176,7 +1192,8 @@ let setupPickedUser = null;
 
 // Today's date key
 function todayKey() {
-  return new Date().toISOString().slice(0,10);
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
 }
 
 function loadState() {
@@ -1486,10 +1503,11 @@ function renderFoodScreen() {
       <div class="food-item">
         <div>
           <div class="food-item-name">${it.name}</div>
-          <div class="food-item-qty">${it.qty}g · P:${Math.round(it.p)}g C:${Math.round(it.c)}g G:${Math.round(it.f)}g</div>
+          <div class="food-item-qty">${it.unit || (it.qty + 'g')} · P:${Math.round(it.p)}g C:${Math.round(it.c)}g G:${Math.round(it.f)}g</div>
         </div>
-        <div style="display:flex;align-items:center;gap:10px">
+        <div style="display:flex;align-items:center;gap:6px">
           <div class="food-item-cal">${Math.round(it.cal)}</div>
+          <button onclick="editFoodItem(${mi},${ii})" style="background:none;border:none;color:var(--text2);font-size:14px;cursor:pointer;padding:2px 4px" title="Editar">✏️</button>
           <div class="food-item-del" onclick="deleteFoodItem(${mi},${ii})">✕</div>
         </div>
       </div>`).join('');
@@ -1513,12 +1531,31 @@ function deleteFoodItem(mealIndex, itemIndex) {
   renderDashboard();
 }
 
+function editFoodItem(mealIndex, itemIndex) {
+  const today = todayKey();
+  const item = getDay(today).meals[mealIndex].items[itemIndex];
+  const ratio = item.qty > 0 ? item.qty / 100 : 1;
+  pendingFood = {
+    id: 'edit_' + Date.now(),
+    name: item.name,
+    cal: item.cal / ratio,
+    p: item.p / ratio,
+    c: item.c / ratio,
+    f: item.f / ratio,
+  };
+  activeMealIndex = mealIndex;
+  editingItem = {mealIndex, itemIndex};
+  openFoodQtyModal(item.qty);
+}
+
 // ═══════════════════════════════════════════════════════
 //  FOOD MODAL
 // ═══════════════════════════════════════════════════════
 let pendingFood = null;
 let currentSearchResults = [];
 let searchDebounceTimer = null;
+let editingItem = null;
+let fqmMode = 'g';
 
 function openFoodModal(mealIndex) {
   activeMealIndex = mealIndex;
@@ -1547,7 +1584,7 @@ function searchFood(q) {
 
 async function fetchFoodFromAPI(q) {
   try {
-    const url = `https://world.openfoodfacts.org/cgi/search.pl?search_terms=${encodeURIComponent(q)}&json=1&action=process&fields=product_name,nutriments,brands&page_size=20&search_simple=1`;
+    const url = `https://world.openfoodfacts.org/cgi/search.pl?search_terms=${encodeURIComponent(q)}&json=1&action=process&fields=product_name,nutriments,brands&page_size=30&search_simple=1&lc=pt&tagtype_0=countries&tag_contains_0=contains&tag_0=brazil`;
     const resp = await fetch(url);
     const data = await resp.json();
     const results = [];
@@ -1601,6 +1638,73 @@ function renderLocalFoodSearch(q) {
   currentSearchResults = results;
   renderSearchResults(results);
 }
+
+// ─── FAVORITOS POR REFEIÇÃO ────────────────────────────
+function getMealFavorites() {
+  const u = user();
+  if (!u.favorites || Array.isArray(u.favorites)) u.favorites = {};
+  if (!u.favorites[activeMealIndex]) u.favorites[activeMealIndex] = [];
+  return u.favorites[activeMealIndex];
+}
+
+function isFavorite(foodId) {
+  return getMealFavorites().some(f => String(f.id) === String(foodId));
+}
+
+function toggleFavorite(foodId, resultIndex, event) {
+  event.stopPropagation();
+  const mealFavs = getMealFavorites();
+  const idx = mealFavs.findIndex(f => String(f.id) === String(foodId));
+  if (idx >= 0) {
+    mealFavs.splice(idx, 1);
+  } else {
+    const food = currentSearchResults[resultIndex];
+    if (food) mealFavs.push({...food});
+  }
+  saveState();
+  const btn = document.querySelector(`[data-fav-id="${foodId}"]`);
+  if (btn) btn.textContent = isFavorite(foodId) ? '❤️' : '🤍';
+  renderFavoritesSection();
+}
+
+function renderFavoritesSection() {
+  const favs = getMealFavorites();
+  const section = document.getElementById('favoritesSection');
+  const list = document.getElementById('favoritesList');
+  const mealNames = ['Café da manhã','Almoço','Lanche da tarde','Jantar'];
+  const mealName = mealNames[activeMealIndex] || 'esta refeição';
+  if (favs.length === 0) {
+    section.style.display = 'none';
+    return;
+  }
+  section.style.display = 'block';
+  document.querySelector('#favoritesSection > div:first-child').textContent = `⭐ Favoritos — ${mealName}`;
+  list.innerHTML = favs.map((f, i) => `
+    <div class="search-result-item" onclick="selectFavorite(${i})">
+      <div style="flex:1;min-width:0">
+        <div class="sri-name" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${f.name}</div>
+        <div class="sri-macros">P: ${f.p}g · C: ${f.c}g · G: ${f.f}g <small>(por 100g)</small></div>
+      </div>
+      <div style="display:flex;align-items:center;gap:6px;flex-shrink:0;margin-left:8px">
+        <div class="sri-cal">${f.cal} kcal</div>
+        <button onclick="removeFavorite(${i},event)" style="background:none;border:none;font-size:18px;cursor:pointer;padding:2px;line-height:1" title="Remover favorito">❤️</button>
+      </div>
+    </div>`).join('');
+}
+
+function selectFavorite(index) {
+  pendingFood = getMealFavorites()[index];
+  closeFoodModal();
+  openFoodQtyModal();
+}
+
+function removeFavorite(index, event) {
+  event.stopPropagation();
+  getMealFavorites().splice(index, 1);
+  saveState();
+  renderFavoritesSection();
+}
+// ───────────────────────────────────────────────────────
 
 function renderSearchResults(results) {
   const el = document.getElementById('foodSearchResults');
@@ -1685,7 +1789,7 @@ Se não houver alimentos visíveis: {"foods":[],"error":"motivo"}`;
 
   try {
     const resp = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${key}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${key}`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -1845,16 +1949,39 @@ function addCustomFood() {
   openFoodQtyModal(qty);
 }
 
+function setFqmUnit(mode) {
+  fqmMode = mode;
+  const isG = mode === 'g';
+  document.getElementById('fqmGramsSection').style.display = isG ? '' : 'none';
+  document.getElementById('fqmUnitsSection').style.display = isG ? 'none' : '';
+  document.getElementById('fqmUnitGrams').style.cssText =
+    `flex:1;padding:8px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;border:1.5px solid ${isG?'var(--green)':'var(--border)'};background:${isG?'var(--green-dim)':'none'};color:${isG?'var(--green)':'var(--text2)'}`;
+  document.getElementById('fqmUnitUnits').style.cssText =
+    `flex:1;padding:8px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;border:1.5px solid ${!isG?'var(--green)':'var(--border)'};background:${!isG?'var(--green-dim)':'none'};color:${!isG?'var(--green)':'var(--text2)'}`;
+  updateFoodQtyPreview();
+}
+
 function openFoodQtyModal(defaultQty=100) {
+  fqmMode = 'g';
   document.getElementById('fqmTitle').textContent = pendingFood.name;
   document.getElementById('fqmQty').value = defaultQty;
+  document.getElementById('fqmUnits').value = 1;
+  document.getElementById('fqmUnitWeight').value = defaultQty > 0 ? defaultQty : 50;
+  document.getElementById('fqmConfirmBtn').textContent = editingItem ? 'Salvar alteração' : 'Adicionar à refeição';
+  setFqmUnit('g');
   document.getElementById('foodQtyModal').classList.add('open');
   updateFoodQtyPreview();
-  document.getElementById('fqmQty').oninput = updateFoodQtyPreview;
 }
 
 function updateFoodQtyPreview() {
-  const qty = parseFloat(document.getElementById('fqmQty').value) || 0;
+  let qty;
+  if (fqmMode === 'u') {
+    const units = parseFloat(document.getElementById('fqmUnits').value) || 0;
+    const unitWeight = parseFloat(document.getElementById('fqmUnitWeight').value) || 0;
+    qty = units * unitWeight;
+  } else {
+    qty = parseFloat(document.getElementById('fqmQty').value) || 0;
+  }
   const ratio = qty / 100;
   const cal = Math.round(pendingFood.cal * ratio);
   const p = (pendingFood.p * ratio).toFixed(1);
@@ -1865,24 +1992,42 @@ function updateFoodQtyPreview() {
 }
 
 function closeFoodQtyModal() {
+  const wasEditing = editingItem !== null;
+  editingItem = null;
+  fqmMode = 'g';
   document.getElementById('foodQtyModal').classList.remove('open');
-  openFoodModal(activeMealIndex);
+  if (!wasEditing) openFoodModal(activeMealIndex);
 }
 
 function confirmFoodQty() {
-  const qty = parseFloat(document.getElementById('fqmQty').value) || 0;
+  let qty, displayUnit;
+  if (fqmMode === 'u') {
+    const units = parseFloat(document.getElementById('fqmUnits').value) || 0;
+    const unitWeight = parseFloat(document.getElementById('fqmUnitWeight').value) || 0;
+    qty = units * unitWeight;
+    displayUnit = units === 1 ? '1 unidade' : `${units} unidades`;
+  } else {
+    qty = parseFloat(document.getElementById('fqmQty').value) || 0;
+    displayUnit = null;
+  }
   if (qty <= 0) { alert('Informe a quantidade'); return; }
   const ratio = qty / 100;
   const item = {
     name: pendingFood.name,
     qty: qty,
+    unit: displayUnit,
     cal: pendingFood.cal * ratio,
     p: pendingFood.p * ratio,
     c: pendingFood.c * ratio,
     f: pendingFood.f * ratio,
   };
   const today = todayKey();
-  getDay(today).meals[activeMealIndex].items.push(item);
+  if (editingItem) {
+    getDay(today).meals[editingItem.mealIndex].items[editingItem.itemIndex] = item;
+    editingItem = null;
+  } else {
+    getDay(today).meals[activeMealIndex].items.push(item);
+  }
   saveState();
   document.getElementById('foodQtyModal').classList.remove('open');
   renderFoodScreen();
@@ -2139,7 +2284,7 @@ function updateCharts() {
   const days = [];
   for (let i=6; i>=0; i--) {
     const d = new Date(); d.setDate(d.getDate()-i);
-    days.push(d.toISOString().slice(0,10));
+    days.push(`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`);
   }
   const goal = calcGoal(u.profile);
   calChart.data.labels = days.map(d => d.slice(5));
@@ -2247,132 +2392,6 @@ function renderWaterCard() {
   }
 }
 
-// ═══════════════════════════════════════════════════════
-//  FAVORITOS
-// ═══════════════════════════════════════════════════════
-function isFavorite(foodId) {
-  return (user().favorites || []).some(f => String(f.id) === String(foodId));
-}
-
-function toggleFavorite(foodId, index, event) {
-  event.stopPropagation();
-  if (!user().favorites) user().favorites = [];
-  const favs = user().favorites;
-  const existing = favs.findIndex(f => String(f.id) === String(foodId));
-  if (existing >= 0) {
-    favs.splice(existing, 1);
-  } else {
-    const food = currentSearchResults[index];
-    if (food) favs.push({...food});
-  }
-  saveState();
-  renderFavoritesSection();
-  // Atualiza o ícone no resultado
-  const btn = document.querySelector(`[data-fav-id="${foodId}"]`);
-  if (btn) btn.textContent = isFavorite(foodId) ? '❤️' : '🤍';
-}
-
-function renderFavoritesSection() {
-  const favs = user().favorites || [];
-  const section = document.getElementById('favoritesSection');
-  const list = document.getElementById('favoritesList');
-  if (!section || !list) return;
-  if (favs.length === 0) { section.style.display = 'none'; return; }
-  section.style.display = 'block';
-  list.innerHTML = favs.map((f, i) => `
-    <div class="search-result-item" onclick="selectFavorite(${i})">
-      <div style="flex:1;min-width:0">
-        <div class="sri-name" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${f.name}</div>
-        <div class="sri-macros">P: ${f.p}g · C: ${f.c}g · G: ${f.f}g</div>
-      </div>
-      <div style="display:flex;align-items:center;gap:6px;flex-shrink:0;margin-left:8px">
-        <div class="sri-cal">${f.cal} kcal</div>
-        <button onclick="removeFavorite(${i},event)" style="background:none;border:none;font-size:18px;cursor:pointer;padding:2px;line-height:1">❤️</button>
-      </div>
-    </div>`).join('');
-}
-
-function selectFavorite(index) {
-  pendingFood = (user().favorites || [])[index];
-  if (!pendingFood) return;
-  closeFoodModal();
-  openFoodQtyModal();
-}
-
-function removeFavorite(index, event) {
-  event.stopPropagation();
-  if (!user().favorites) return;
-  user().favorites.splice(index, 1);
-  saveState();
-  renderFavoritesSection();
-}
-
-// ═══════════════════════════════════════════════════════
-//  RESUMO SEMANAL
-// ═══════════════════════════════════════════════════════
-function renderWeeklySummary() {
-  const el = document.getElementById('weeklySummaryContent');
-  if (!el) return;
-  const u = user();
-  const goal = calcGoal(u.profile);
-
-  const days = [];
-  for (let i = 6; i >= 0; i--) {
-    const d = new Date(); d.setDate(d.getDate() - i);
-    days.push(d.toISOString().slice(0, 10));
-  }
-
-  let totalCal = 0, totalBurned = 0, workoutDays = 0, loggedDays = 0;
-  const dayData = days.map(dk => {
-    const day = u.days[dk];
-    if (!day) return { dk, cal: 0, burned: 0, workouts: 0 };
-    let cal = 0;
-    day.meals?.forEach(m => m.items?.forEach(it => { cal += it.cal; }));
-    cal = Math.round(cal);
-    const burned = day.workouts?.reduce((s, w) => s + (w.kcal || 0), 0) || 0;
-    const workouts = day.workouts?.length || 0;
-    if (cal > 0) loggedDays++;
-    if (workouts > 0) workoutDays++;
-    totalCal += cal;
-    totalBurned += burned;
-    return { dk, cal, burned, workouts };
-  });
-
-  const avgCal = loggedDays > 0 ? Math.round(totalCal / loggedDays) : 0;
-  const totalDeficit = loggedDays > 0 ? (goal * loggedDays - totalCal + totalBurned) : 0;
-
-  el.innerHTML = `
-    <div class="stat-row" style="margin-bottom:14px">
-      <div class="stat-box">
-        <div class="stat-value blue">${workoutDays}</div>
-        <div class="stat-label">💪 Treinos</div>
-      </div>
-      <div class="stat-box">
-        <div class="stat-value orange">${avgCal || '—'}</div>
-        <div class="stat-label">🍽️ Média kcal</div>
-      </div>
-      <div class="stat-box">
-        <div class="stat-value ${totalDeficit >= 0 ? 'green' : 'red'}">${loggedDays > 0 ? Math.abs(Math.round(totalDeficit)) : '—'}</div>
-        <div class="stat-label">${totalDeficit >= 0 ? '⚡ Déficit' : '⬆️ Superávit'}</div>
-      </div>
-    </div>
-    <div style="display:flex;gap:4px;align-items:flex-end;height:60px;margin-bottom:6px">
-      ${dayData.map(d => {
-        const label = new Date(d.dk + 'T12:00:00').toLocaleDateString('pt-BR', {weekday:'short'}).slice(0,3);
-        const pct = goal > 0 ? Math.min(d.cal / goal * 100, 100) : 0;
-        const color = d.cal > goal ? 'var(--red)' : d.cal > 0 ? 'var(--orange)' : 'var(--card2)';
-        return `
-          <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:3px">
-            <div style="font-size:10px;color:var(--text3)">${label}</div>
-            <div style="width:100%;background:var(--card2);border-radius:4px;height:40px;display:flex;align-items:flex-end;overflow:hidden">
-              <div style="width:100%;height:${pct}%;background:${color};transition:height .3s;min-height:${d.cal>0?'3px':'0'}"></div>
-            </div>
-            <div style="font-size:13px">${d.workouts > 0 ? '💪' : (d.cal > 0 ? '🍽️' : '·')}</div>
-          </div>`;
-      }).join('')}
-    </div>
-    <div style="font-size:11px;color:var(--text3);text-align:center">${loggedDays}/7 dias registrados · ${totalBurned} kcal queimadas na semana</div>`;
-}
 
 // ═══════════════════════════════════════════════════════
 //  CLOSE MODALS ON OVERLAY CLICK
@@ -2400,13 +2419,12 @@ loadState();
   const thomazReady = state.thomaz.profile.setup;
   const jessicaReady = state.jessica.profile.setup;
 
-  // ── Callback do OAuth Strava ──
+  // Callback do OAuth Strava
   if (_stravaCode && _stravaScope.includes('activity')) {
     const pendingUser = localStorage.getItem('strava_pending_user') || (thomazReady ? 'thomaz' : 'jessica');
     localStorage.removeItem('strava_pending_user');
     window.history.replaceState({}, '', window.location.pathname);
 
-    // Determina qual usuário lançar o app
     currentUser = state[pendingUser]?.profile?.setup ? pendingUser
       : thomazReady ? 'thomaz'
       : jessicaReady ? 'jessica'
@@ -2414,7 +2432,6 @@ loadState();
     if (!currentUser) { document.getElementById('setupScreen').classList.add('active'); return; }
 
     launchApp();
-    // Navega direto pro Perfil para mostrar o status do Strava
     document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
     document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
     document.getElementById('screen-profile').classList.add('active');
@@ -2424,13 +2441,13 @@ loadState();
     return;
   }
 
-  // ── Erro OAuth (usuário cancelou no Strava) ──
+  // Erro OAuth (usuário cancelou no Strava)
   if (_urlParams.get('error')) {
     localStorage.removeItem('strava_pending_user');
     window.history.replaceState({}, '', window.location.pathname);
   }
 
-  // ── Init normal ──
+  // Init normal
   if (_urlUser === 'thomaz' || _urlUser === 'jessica') {
     if (state[_urlUser].profile.setup) {
       currentUser = _urlUser;
@@ -2447,5 +2464,4 @@ loadState();
   }
 })();
 </script>
-</body>
-</html>                                                                                       
+</html>
