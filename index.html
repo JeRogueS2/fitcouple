@@ -1817,10 +1817,12 @@ Se não houver alimentos visíveis: {"foods":[],"error":"motivo"}`;
 
   // Tenta modelos em ordem até encontrar um disponível na chave
   const MODELS = [
-    'gemini-2.0-flash',
+    'gemini-2.5-flash-preview-05-20',
+    'gemini-2.0-flash-lite',
+    'gemini-2.0-flash-exp',
+    'gemini-1.5-flash-002',
     'gemini-1.5-flash',
-    'gemini-1.5-flash-latest',
-    'gemini-pro-vision',
+    'gemini-2.0-flash',
   ];
 
   const body = JSON.stringify({
@@ -1840,11 +1842,12 @@ Se não houver alimentos visíveis: {"foods":[],"error":"motivo"}`;
       );
       data = await resp.json();
       if (resp.ok) break; // modelo funcionou
-      if (!data.error?.message?.includes('not found') && !data.error?.message?.includes('not supported')) {
-        throw new Error(data.error?.message || 'Erro na API');
-      }
+      // Parar só em erros de auth ou cota — para erros de modelo, tentar o próximo
+      if (resp.status === 401 || resp.status === 403) throw new Error('Chave inválida. Verifique sua chave Gemini em Perfil → Integrações.');
+      if (resp.status === 429) throw new Error('Cota esgotada. Tente novamente em alguns minutos.');
+      // Qualquer outro erro (modelo não encontrado, indisponível, etc.) → tenta próximo
     }
-    if (!resp.ok) throw new Error(data?.error?.message || 'Nenhum modelo disponível. Verifique sua chave Gemini.');
+    if (!resp.ok) throw new Error('Nenhum modelo disponível para esta chave. Verifique o billing em aistudio.google.com.');
 
     const text = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
     const jsonMatch = text.match(/\{[\s\S]*\}/);
@@ -2504,9 +2507,7 @@ loadState();
     if (state[_urlUser].profile.setup) {
       currentUser = _urlUser;
       launchApp();
-    } else {
       document.getElementById('setupScreen').classList.add('active');
-      setTimeout(() => pickUser(_urlUser), 100);
     }
   } else if (thomazReady || jessicaReady) {
     currentUser = thomazReady ? 'thomaz' : 'jessica';
