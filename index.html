@@ -1815,23 +1815,36 @@ async function analyzePhotoWithGemini(base64, mimeType, el) {
 {"foods":[{"name":"nome do alimento","qty":100,"cal":165,"p":31,"c":0,"f":3.6}]}
 Se não houver alimentos visíveis: {"foods":[],"error":"motivo"}`;
 
+  // Tenta modelos em ordem até encontrar um disponível na chave
+  const MODELS = [
+    'gemini-1.5-flash',
+    'gemini-1.5-flash-latest',
+    'gemini-pro-vision',
+    'gemini-1.5-pro',
+  ];
+
+  const body = JSON.stringify({
+    contents: [{ parts: [
+      { inlineData: { mimeType, data: base64 } },
+      { text: prompt }
+    ]}],
+    generationConfig: { temperature: 0.1, maxOutputTokens: 1024 }
+  });
+
+  let resp, data;
   try {
-    const resp = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=${key}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{ parts: [
-            { inlineData: { mimeType, data: base64 } },
-            { text: prompt }
-          ]}],
-          generationConfig: { temperature: 0.1, maxOutputTokens: 1024 }
-        })
+    for (const model of MODELS) {
+      resp = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`,
+        { method: 'POST', headers: { 'Content-Type': 'application/json' }, body }
+      );
+      data = await resp.json();
+      if (resp.ok) break; // modelo funcionou
+      if (!data.error?.message?.includes('not found') && !data.error?.message?.includes('not supported')) {
+        throw new Error(data.error?.message || 'Erro na API');
       }
-    );
-    const data = await resp.json();
-    if (!resp.ok) throw new Error(data.error?.message || 'Erro na API');
+    }
+    if (!resp.ok) throw new Error(data?.error?.message || 'Nenhum modelo disponível. Verifique sua chave Gemini.');
 
     const text = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
     const jsonMatch = text.match(/\{[\s\S]*\}/);
