@@ -710,16 +710,16 @@ select.form-input { cursor: pointer; }
           <div class="integration-icon">📸</div>
           <div class="integration-info">
             <div class="integration-name">Foto → Macros (IA)</div>
-            <div class="integration-status" id="geminiStatus">Cole sua chave do Google Gemini abaixo</div>
+            <div class="integration-status" id="geminiStatus">Cole sua chave do Groq abaixo</div>
           </div>
           <div id="geminiStatusBadge"><span class="tag-soon">Inativo</span></div>
         </div>
         <div style="width:100%">
           <div style="display:flex;gap:8px">
-            <input type="password" class="form-input" id="geminiKeyInput" placeholder="AIza..." style="flex:1;font-size:13px;padding:8px 12px">
+            <input type="password" class="form-input" id="geminiKeyInput" placeholder="gsk_..." style="flex:1;font-size:13px;padding:8px 12px">
             <button onclick="saveGeminiKey()" style="background:var(--purple);border:none;border-radius:var(--radius-sm);padding:0 14px;color:#fff;font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap">Salvar</button>
           </div>
-          <p style="font-size:11px;color:var(--text3);margin-top:6px">Gratuito em <span style="color:var(--blue)">aistudio.google.com</span> → Get API key</p>
+          <p style="font-size:11px;color:var(--text3);margin-top:6px">Gratuito em <span style="color:var(--blue)">console.groq.com</span> → API Keys</p>
         </div>
       </div>
       <p style="font-size:12px;color:var(--text2);text-align:center;margin-top:8px">
@@ -1775,34 +1775,32 @@ function selectFood(index) {
   openFoodQtyModal();
 }
 
-// ─── GEMINI PHOTO ANALYSIS ─────────────────────────────
+// ─── GROQ PHOTO ANALYSIS ─────────────────────────────
 function saveGeminiKey() {
   const key = document.getElementById('geminiKeyInput').value.trim();
-  if (!key.startsWith('AIza')) { alert('Chave inválida. Deve começar com AIza...'); return; }
+  if (!key.startsWith('gsk_')) { alert('Chave inválida. Deve começar com gsk_...'); return; }
   state.geminiKey = key;
   saveState();
   updateGeminiUI();
-  alert('✅ Chave salva! O botão 📸 aparecerá no modal de alimentos.');
+  alert('✅ Chave Groq salva! O botão 🍽️ Foto do prato já está ativo.');
 }
 
 function updateGeminiUI() {
   const key = state.geminiKey || '';
-  const active = key.length > 10;
+  const active = key.startsWith('gsk_') && key.length > 10;
   const badge = document.getElementById('geminiStatusBadge');
   const status = document.getElementById('geminiStatus');
-  const btn = document.getElementById('photoAIBtn');
   if (badge) badge.innerHTML = active
     ? '<span style="font-size:10px;color:var(--green);font-weight:700;background:var(--green-dim);border-radius:6px;padding:2px 6px">✅ Ativo</span>'
     : '<span class="tag-soon">Inativo</span>';
-  if (status) status.textContent = active ? 'Gemini Flash ativo — analisando fotos' : 'Cole sua chave do Google Gemini abaixo';
-  // btn always visible now
+  if (status) status.textContent = active ? 'Groq IA ativa — analisando fotos' : 'Cole sua chave do Groq abaixo';
   const input = document.getElementById('geminiKeyInput');
   if (input && active) input.value = key.slice(0,8) + '••••••••••••';
 }
 
 function openFoodPhotoScanner() {
   const key = state.geminiKey || '';
-  if (!key) { alert('Configure sua chave do Gemini na tela de Perfil → Integrações.'); return; }
+  if (!key || !key.startsWith('gsk_')) { alert('Configure sua chave do Groq na tela de Perfil → Integrações.'); return; }
   document.getElementById('foodPhotoInput').click();
 }
 
@@ -1828,43 +1826,56 @@ async function analyzePhotoWithGemini(base64, mimeType, el) {
 {"foods":[{"name":"nome do alimento","qty":100,"cal":165,"p":31,"c":0,"f":3.6}]}
 Se não houver alimentos visíveis: {"foods":[],"error":"motivo"}`;
 
-  // Tenta modelos em ordem até encontrar um disponível na chave
+  // Modelos Groq com visão, em ordem de preferência
   const MODELS = [
-    'gemini-2.5-flash-preview-05-20',
-    'gemini-2.0-flash-lite',
-    'gemini-2.0-flash-exp',
-    'gemini-1.5-flash-002',
-    'gemini-1.5-flash',
-    'gemini-2.0-flash',
+    'meta-llama/llama-4-scout-17b-16e-instruct',
+    'llama-3.2-11b-vision-preview',
   ];
 
-  const body = JSON.stringify({
-    contents: [{ parts: [
-      { inlineData: { mimeType, data: base64 } },
-      { text: prompt }
-    ]}],
-    generationConfig: { temperature: 0.1, maxOutputTokens: 1024 }
-  });
-
-  let resp, data;
+  let resp, data, lastError;
   try {
     for (const model of MODELS) {
-      resp = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`,
-        { method: 'POST', headers: { 'Content-Type': 'application/json' }, body }
-      );
-      data = await resp.json();
-      if (resp.ok) break; // modelo funcionou
-      // Parar só em erros de auth ou cota — para erros de modelo, tentar o próximo
-      if (resp.status === 401 || resp.status === 403) throw new Error('Chave inválida. Verifique sua chave Gemini em Perfil → Integrações.');
-      if (resp.status === 429) throw new Error('Cota esgotada. Tente novamente em alguns minutos.');
-      // Qualquer outro erro (modelo não encontrado, indisponível, etc.) → tenta próximo
-    }
-    if (!resp.ok) throw new Error('Nenhum modelo disponível para esta chave. Verifique o billing em aistudio.google.com.');
+      const body = JSON.stringify({
+        model,
+        messages: [{
+          role: 'user',
+          content: [
+            { type: 'image_url', image_url: { url: `data:${mimeType};base64,${base64}` } },
+            { type: 'text', text: prompt }
+          ]
+        }],
+        temperature: 0.1,
+        max_tokens: 1024
+      });
 
-    const text = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+      try {
+        resp = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${key}`
+          },
+          body
+        });
+        data = await resp.json();
+
+        if (resp.ok) break; // modelo funcionou
+
+        if (resp.status === 401 || resp.status === 403) throw new Error('Chave Groq inválida. Verifique em Perfil → Integrações.');
+        if (resp.status === 429) throw new Error('Cota esgotada. Tente novamente em alguns minutos.');
+        // outros erros (modelo indisponível etc.) → tenta o próximo
+        lastError = data?.error?.message || `Erro ${resp.status}`;
+      } catch(innerErr) {
+        if (innerErr.message.includes('Chave') || innerErr.message.includes('Cota')) throw innerErr;
+        lastError = innerErr.message;
+      }
+    }
+
+    if (!resp || !resp.ok) throw new Error(lastError || 'Nenhum modelo disponível. Verifique sua chave Groq.');
+
+    const text = data.choices?.[0]?.message?.content || '';
     const jsonMatch = text.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) throw new Error('Resposta inválida da IA');
+    if (!jsonMatch) throw new Error('Resposta inválida da IA. Tente novamente.');
 
     const result = JSON.parse(jsonMatch[0]);
     if (result.error || !result.foods?.length) {
@@ -2528,6 +2539,9 @@ loadState();
   } else {
     document.getElementById('setupScreen').classList.add('active');
   }
-})();
+}
+
+init();
 </script>
+</body>
 </html>
