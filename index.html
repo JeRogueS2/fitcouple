@@ -982,6 +982,25 @@ const FOOD_DB = [
 
 const MEALS = ['Café da manhã','Almoço','Lanche da tarde','Jantar'];
 
+// Peso médio por unidade (g) para alimentos comuns
+const UNIT_WEIGHT_DEFAULTS = [
+  {keywords: ['ovo inteiro','ovo cozido','ovo frito','ovo mexido','ovo'], weight: 55},
+  {keywords: ['banana prata','banana nanica','banana'], weight: 100},
+  {keywords: ['maçã'], weight: 150},
+  {keywords: ['laranja'], weight: 130},
+  {keywords: ['manga'], weight: 200},
+  {keywords: ['morango'], weight: 12},
+  {keywords: ['pão francês'], weight: 50},
+  {keywords: ['pão integral','pão de forma'], weight: 25},
+  {keywords: ['pão de queijo'], weight: 50},
+  {keywords: ['castanha do pará'], weight: 5},
+  {keywords: ['castanha de caju'], weight: 10},
+  {keywords: ['iogurte grego','iogurte'], weight: 100},
+  {keywords: ['tapioca'], weight: 100},
+  {keywords: ['mamão'], weight: 250},
+  {keywords: ['cápsula','comprimido'], weight: 1},
+];
+
 const WORKOUT_KCAL = {
   musculacao: 6.5,  // kcal/min (estimativa para 80kg)
   corrida: 10,
@@ -1200,6 +1219,13 @@ function loadState() {
   try { state = JSON.parse(localStorage.getItem('fitcouple_state') || '{}'); } catch(e) { state = {}; }
   if (!state.thomaz) state.thomaz = defaultUserState('thomaz');
   if (!state.jessica) state.jessica = defaultUserState('jessica');
+  // Migração: remover Ceia dos dias já salvos
+  ['thomaz','jessica'].forEach(uid => {
+    if (!state[uid]?.days) return;
+    Object.values(state[uid].days).forEach(day => {
+      if (day.meals) day.meals = day.meals.filter(m => m.name !== 'Ceia');
+    });
+  });
 }
 
 function saveState() {
@@ -1608,6 +1634,8 @@ async function fetchFoodFromAPI(q) {
         const prot = parseFloat(n.proteins_100g) || 0;
         const carb = parseFloat(n.carbohydrates_100g) || 0;
         const fat  = parseFloat(n.fat_100g) || 0;
+        // Descartar resultados sem nenhum dado nutricional
+        if (prot === 0 && carb === 0 && fat === 0) return;
         const brand = p.brands ? p.brands.split(',')[0].trim() : '';
         const name = brand ? `${p.product_name} (${brand})` : p.product_name;
 
@@ -1961,12 +1989,23 @@ function setFqmUnit(mode) {
   updateFoodQtyPreview();
 }
 
+function getUnitWeightDefault(foodName) {
+  const name = (foodName || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'');
+  for (const entry of UNIT_WEIGHT_DEFAULTS) {
+    if (entry.keywords.some(k => name.includes(k.normalize('NFD').replace(/[̀-ͯ]/g,'')))) {
+      return entry.weight;
+    }
+  }
+  return null;
+}
+
 function openFoodQtyModal(defaultQty=100) {
   fqmMode = 'g';
   document.getElementById('fqmTitle').textContent = pendingFood.name;
   document.getElementById('fqmQty').value = defaultQty;
   document.getElementById('fqmUnits').value = 1;
-  document.getElementById('fqmUnitWeight').value = defaultQty > 0 ? defaultQty : 50;
+  const unitDefault = getUnitWeightDefault(pendingFood.name) || (defaultQty > 0 ? defaultQty : 50);
+  document.getElementById('fqmUnitWeight').value = unitDefault;
   document.getElementById('fqmConfirmBtn').textContent = editingItem ? 'Salvar alteração' : 'Adicionar à refeição';
   setFqmUnit('g');
   document.getElementById('foodQtyModal').classList.add('open');
