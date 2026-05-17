@@ -2532,15 +2532,68 @@ function renderWaterCard() {
 }
 
 
+
 // ═══════════════════════════════════════════════════════
-//  CLOSE MODALS ON OVERLAY CLICK
+//  INIT
 // ═══════════════════════════════════════════════════════
-document.getElementById('foodModal').addEventListener('click', function(e) {
-  if (e.target === this) closeFoodModal();
-});
-document.getElementById('foodQtyModal').addEventListener('click', function(e) {
-  if (e.target === this) closeFoodQtyModal();
-});
+loadState();
+
+(async () => {
+  const _urlParams = new URLSearchParams(window.location.search);
+  const _stravaCode = _urlParams.get('code');
+  const _stravaScope = _urlParams.get('scope') || '';
+  const _urlUser = _urlParams.get('user');
+  const thomazReady = state.thomaz.profile.setup;
+  const jessicaReady = state.jessica.profile.setup;
+
+  // Callback do OAuth Strava
+  if (_stravaCode && _stravaScope.includes('activity')) {
+    const pendingUser = localStorage.getItem('strava_pending_user') || (thomazReady ? 'thomaz' : 'jessica');
+    localStorage.removeItem('strava_pending_user');
+    window.history.replaceState({}, '', window.location.pathname);
+
+    currentUser = state[pendingUser]?.profile?.setup ? pendingUser
+      : thomazReady ? 'thomaz'
+      : jessicaReady ? 'jessica'
+      : null;
+    if (!currentUser) { document.getElementById('setupScreen').classList.add('active'); return; }
+
+    launchApp();
+    document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+    document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+    document.getElementById('screen-profile').classList.add('active');
+    document.querySelector('.nav-item:last-child').classList.add('active');
+    renderProfileScreen();
+    await exchangeStravaCode(_stravaCode, pendingUser);
+    return;
+  }
+
+  if (_urlParams.get('error')) {
+    localStorage.removeItem('strava_pending_user');
+    window.history.replaceState({}, '', window.location.pathname);
+  }
+
+  if (_urlUser === 'thomaz' || _urlUser === 'jessica') {
+    if (state[_urlUser].profile.setup) {
+      currentUser = _urlUser;
+      launchApp();
+    } else {
+      document.getElementById('setupScreen').classList.add('active');
+      setTimeout(() => pickUser(_urlUser), 100);
+    }
+  } else if (thomazReady || jessicaReady) {
+    currentUser = thomazReady ? 'thomaz' : 'jessica';
+    launchApp();
+  } else {
+    document.getElementById('setupScreen').classList.add('active');
+  }
+
+  document.getElementById('foodModal').addEventListener('click', function(e) {
+    if (e.target === this) closeFoodModal();
+  });
+  document.getElementById('foodQtyModal').addEventListener('click', function(e) {
+    if (e.target === this) closeFoodQtyModal();
+  });
 })();
 </script>
 </body>
