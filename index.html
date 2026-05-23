@@ -716,7 +716,7 @@ select.form-input { cursor: pointer; }
         </div>
         <div style="width:100%">
           <div style="display:flex;gap:8px">
-            <input type="password" class="form-input" id="notionTokenInput" placeholder="secret_..." style="flex:1;font-size:13px;padding:8px 12px">
+            <input type="password" class="form-input" id="notionTokenInput" placeholder="ntn_..." style="flex:1;font-size:13px;padding:8px 12px">
             <button onclick="saveNotionToken()" style="background:var(--purple);border:none;border-radius:var(--radius-sm);padding:0 14px;color:#fff;font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap">Salvar</button>
           </div>
           <p style="font-size:11px;color:var(--text3);margin-top:6px">Em <span style="color:var(--blue)">notion.so/my-integrations</span> → Nova integração → copie o token</p>
@@ -1787,7 +1787,7 @@ function selectFood(index) {
 // ─── NOTION SYNC ─────────────────────────────────────
 function saveNotionToken() {
   const token = document.getElementById('notionTokenInput').value.trim();
-  if (!token.startsWith('secret_')) { alert('Token inválido. Deve começar com secret_...'); return; }
+  if (!token.startsWith('ntn_')) { alert('Token inválido. Deve começar com ntn_...'); return; }
   state.notionToken = token;
   saveState();
   updateNotionUI();
@@ -1796,7 +1796,7 @@ function saveNotionToken() {
 
 function updateNotionUI() {
   const token = state.notionToken || '';
-  const active = token.startsWith('secret_') && token.length > 10;
+  const active = token.startsWith('ntn_') && token.length > 10;
   const badge = document.getElementById('notionSyncBadge');
   const status = document.getElementById('notionSyncStatus');
   if (badge) badge.innerHTML = active
@@ -1809,7 +1809,7 @@ function updateNotionUI() {
 
 async function syncFromNotion() {
   const token = state.notionToken || '';
-  if (!token || !token.startsWith('secret_')) {
+  if (!token || !token.startsWith('ntn_')) {
     alert('Configure seu token do Notion em Perfil → Integrações.');
     return;
   }
