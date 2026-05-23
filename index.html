@@ -1410,10 +1410,14 @@ function checkNutriImport() {
     id: Date.now(), name, cal, p, c, f, qty: 100, unit: 'g'
   });
   saveState();
-  renderAll();
-  const foodNavEl = document.querySelector('.nav-item[onclick*="food"]');
-  if (foodNavEl) switchScreen('food', foodNavEl);
-  else renderFoodScreen();
+  renderDashboard();
+  // Navegar para a tela de comida diretamente
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  document.getElementById('screen-food').classList.add('active');
+  const allNavItems = document.querySelectorAll('.nav-item');
+  allNavItems.forEach(n => { if ((n.getAttribute('onclick')||'').includes("'food'")) n.classList.add('active'); });
+  renderFoodScreen();
 }
 
 function updateHeaderDate() {
