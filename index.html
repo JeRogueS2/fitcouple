@@ -1405,7 +1405,7 @@ function checkNutriImport() {
   const mealMap = {'Café da manhã':0,'Almoço':1,'Lanche da manhã':2,'Lanche da tarde':2,'Lanche':2,'Jantar':3,'Outro':1};
   const mealIndex = mealMap[tipo] ?? 1;
   if (!confirm(`📲 Importar do Nutri?\n\n${name}\n${cal} kcal · P: ${p}g · C: ${c}g · G: ${f}g\n\nAdicionar em: ${tipo}`)) return;
-  const today = getToday();
+  const today = todayKey();
   getDay(today).meals[mealIndex].items.push({
     id: Date.now(), name, cal, p, c, f, qty: 100, unit: 'g'
   });
