@@ -1818,7 +1818,7 @@ async function syncFromNotion() {
   const today = new Date().toISOString().split('T')[0];
   const databaseId = 'a0e9fa8e9c704b249349b5da1a9bfd52';
   try {
-    const resp = await fetch(`https://api.notion.com/v1/databases/${databaseId}/query`, {
+    const resp = await fetch(`https://corsproxy.io/?https://api.notion.com/v1/databases/${databaseId}/query`, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${token}`,
