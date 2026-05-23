@@ -777,7 +777,7 @@ select.form-input { cursor: pointer; }
     <input type="text" class="search-input" id="foodSearchInput" placeholder="🔍  Buscar alimento..." oninput="searchFood(this.value)" style="margin-bottom:8px">
     <div style="display:flex;gap:8px;margin-bottom:10px">
       <button onclick="openBarcodeScanner()" style="flex:1;background:var(--card2);border:1.5px solid var(--border);border-radius:var(--radius-sm);padding:10px;font-size:13px;font-weight:600;color:var(--text2);cursor:pointer;transition:background .2s">📷 Código de barras</button>
-      <button onclick="syncFromNotion()" id="notionSyncBtn" style="flex:1;background:var(--purple-dim);border:1.5px solid var(--purple);border-radius:var(--radius-sm);padding:10px;font-size:13px;font-weight:600;color:var(--purple);cursor:pointer">📲 Importar do Nutri</button>
+      <button onclick="alert('Registre a refeição no Nutri Thomaz (Claude) e toque no link gerado — ele importa automaticamente aqui!')" id="notionSyncBtn" style="flex:1;background:var(--purple-dim);border:1.5px solid var(--purple);border-radius:var(--radius-sm);padding:10px;font-size:13px;font-weight:600;color:var(--purple);cursor:pointer">📲 Importar do Nutri</button>
     </div>
     <input type="file" id="barcodeFileInput" accept="image/*" capture style="display:none" onchange="handleBarcodeImage(this)">
     <div id="favoritesSection" style="display:none;margin-bottom:6px">
@@ -1389,6 +1389,29 @@ function launchApp() {
   renderAll();
   initCharts();
   updateNotionUI();
+  checkNutriImport();
+}
+
+function checkNutriImport() {
+  const params = new URLSearchParams(window.location.search);
+  if (!params.has('cal')) return;
+  const name  = params.get('nutri') || 'Refeição do Nutri';
+  const cal   = Math.round(parseFloat(params.get('cal')) || 0);
+  const p     = parseFloat(params.get('p') || 0);
+  const c     = parseFloat(params.get('c') || 0);
+  const f     = parseFloat(params.get('f') || 0);
+  const tipo  = params.get('tipo') || 'Almoço';
+  window.history.replaceState({}, '', window.location.pathname);
+  const mealMap = {'Café da manhã':0,'Almoço':1,'Lanche da manhã':2,'Lanche da tarde':2,'Lanche':2,'Jantar':3,'Outro':1};
+  const mealIndex = mealMap[tipo] ?? 1;
+  if (!confirm(`📲 Importar do Nutri?\n\n${name}\n${cal} kcal · P: ${p}g · C: ${c}g · G: ${f}g\n\nAdicionar em: ${tipo}`)) return;
+  const today = getToday();
+  getDay(today).meals[mealIndex].items.push({
+    id: Date.now(), name, cal, p, c, f, qty: 100, unit: 'g'
+  });
+  saveState();
+  renderAll();
+  switchScreen('food');
 }
 
 function updateHeaderDate() {
