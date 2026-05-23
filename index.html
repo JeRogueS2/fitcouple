@@ -707,19 +707,19 @@ select.form-input { cursor: pointer; }
       </div>
       <div class="integration-item" style="flex-direction:column;align-items:flex-start;gap:10px">
         <div style="display:flex;align-items:center;gap:12px;width:100%">
-          <div class="integration-icon">📸</div>
+          <div class="integration-icon">📲</div>
           <div class="integration-info">
-            <div class="integration-name">Foto → Macros (IA)</div>
-            <div class="integration-status" id="geminiStatus">Cole sua chave do Groq abaixo</div>
+            <div class="integration-name">Nutri Thomaz → App</div>
+            <div class="integration-status" id="notionSyncStatus">Cole seu token do Notion abaixo</div>
           </div>
-          <div id="geminiStatusBadge"><span class="tag-soon">Inativo</span></div>
+          <div id="notionSyncBadge"><span class="tag-soon">Inativo</span></div>
         </div>
         <div style="width:100%">
           <div style="display:flex;gap:8px">
-            <input type="password" class="form-input" id="geminiKeyInput" placeholder="gsk_..." style="flex:1;font-size:13px;padding:8px 12px">
-            <button onclick="saveGeminiKey()" style="background:var(--purple);border:none;border-radius:var(--radius-sm);padding:0 14px;color:#fff;font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap">Salvar</button>
+            <input type="password" class="form-input" id="notionTokenInput" placeholder="secret_..." style="flex:1;font-size:13px;padding:8px 12px">
+            <button onclick="saveNotionToken()" style="background:var(--purple);border:none;border-radius:var(--radius-sm);padding:0 14px;color:#fff;font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap">Salvar</button>
           </div>
-          <p style="font-size:11px;color:var(--text3);margin-top:6px">Gratuito em <span style="color:var(--blue)">console.groq.com</span> → API Keys</p>
+          <p style="font-size:11px;color:var(--text3);margin-top:6px">Em <span style="color:var(--blue)">notion.so/my-integrations</span> → Nova integração → copie o token</p>
         </div>
       </div>
       <p style="font-size:12px;color:var(--text2);text-align:center;margin-top:8px">
@@ -777,10 +777,9 @@ select.form-input { cursor: pointer; }
     <input type="text" class="search-input" id="foodSearchInput" placeholder="🔍  Buscar alimento..." oninput="searchFood(this.value)" style="margin-bottom:8px">
     <div style="display:flex;gap:8px;margin-bottom:10px">
       <button onclick="openBarcodeScanner()" style="flex:1;background:var(--card2);border:1.5px solid var(--border);border-radius:var(--radius-sm);padding:10px;font-size:13px;font-weight:600;color:var(--text2);cursor:pointer;transition:background .2s">📷 Código de barras</button>
-      <button onclick="openFoodPhotoScanner()" id="photoAIBtn" style="flex:1;background:var(--purple-dim);border:1.5px solid var(--purple);border-radius:var(--radius-sm);padding:10px;font-size:13px;font-weight:600;color:var(--purple);cursor:pointer">🍽️ Foto do prato</button>
+      <button onclick="syncFromNotion()" id="notionSyncBtn" style="flex:1;background:var(--purple-dim);border:1.5px solid var(--purple);border-radius:var(--radius-sm);padding:10px;font-size:13px;font-weight:600;color:var(--purple);cursor:pointer">📲 Importar do Nutri</button>
     </div>
     <input type="file" id="barcodeFileInput" accept="image/*" capture style="display:none" onchange="handleBarcodeImage(this)">
-    <input type="file" id="foodPhotoInput" accept="image/*" capture style="display:none" onchange="handleFoodPhoto(this)">
     <div id="favoritesSection" style="display:none;margin-bottom:6px">
       <div style="font-size:11px;color:var(--text2);font-weight:700;text-transform:uppercase;letter-spacing:.4px;margin-bottom:6px">⭐ Favoritos</div>
       <div id="favoritesList"></div>
@@ -1389,7 +1388,7 @@ function launchApp() {
   updateHeaderDate();
   renderAll();
   initCharts();
-  updateGeminiUI();
+  updateNotionUI();
 }
 
 function updateHeaderDate() {
@@ -1785,156 +1784,87 @@ function selectFood(index) {
   openFoodQtyModal();
 }
 
-// ─── GROQ PHOTO ANALYSIS ─────────────────────────────
-function saveGeminiKey() {
-  const key = document.getElementById('geminiKeyInput').value.trim();
-  if (!key.startsWith('gsk_')) { alert('Chave inválida. Deve começar com gsk_...'); return; }
-  state.geminiKey = key;
+// ─── NOTION SYNC ─────────────────────────────────────
+function saveNotionToken() {
+  const token = document.getElementById('notionTokenInput').value.trim();
+  if (!token.startsWith('secret_')) { alert('Token inválido. Deve começar com secret_...'); return; }
+  state.notionToken = token;
   saveState();
-  updateGeminiUI();
-  alert('✅ Chave Groq salva! O botão 🍽️ Foto do prato já está ativo.');
+  updateNotionUI();
+  alert('✅ Token salvo! Lembre de compartilhar o banco "Thomaz — Diário de Nutrição" com sua integração no Notion.');
 }
 
-function updateGeminiUI() {
-  const key = state.geminiKey || '';
-  const active = key.startsWith('gsk_') && key.length > 10;
-  const badge = document.getElementById('geminiStatusBadge');
-  const status = document.getElementById('geminiStatus');
+function updateNotionUI() {
+  const token = state.notionToken || '';
+  const active = token.startsWith('secret_') && token.length > 10;
+  const badge = document.getElementById('notionSyncBadge');
+  const status = document.getElementById('notionSyncStatus');
   if (badge) badge.innerHTML = active
     ? '<span style="font-size:10px;color:var(--green);font-weight:700;background:var(--green-dim);border-radius:6px;padding:2px 6px">✅ Ativo</span>'
     : '<span class="tag-soon">Inativo</span>';
-  if (status) status.textContent = active ? 'Groq IA ativa — analisando fotos' : 'Cole sua chave do Groq abaixo';
-  const input = document.getElementById('geminiKeyInput');
-  if (input && active) input.value = key.slice(0,8) + '••••••••••••';
+  if (status) status.textContent = active ? 'Nutri conectado — importando refeições' : 'Cole seu token do Notion abaixo';
+  const input = document.getElementById('notionTokenInput');
+  if (input && active) input.value = token.slice(0,10) + '••••••••••••';
 }
 
-function openFoodPhotoScanner() {
-  const key = state.geminiKey || '';
-  if (!key || !key.startsWith('gsk_')) { alert('Configure sua chave do Groq na tela de Perfil → Integrações.'); return; }
-  document.getElementById('foodPhotoInput').click();
-}
-
-async function handleFoodPhoto(input) {
-  if (!input.files || !input.files[0]) return;
+async function syncFromNotion() {
+  const token = state.notionToken || '';
+  if (!token || !token.startsWith('secret_')) {
+    alert('Configure seu token do Notion em Perfil → Integrações.');
+    return;
+  }
   const el = document.getElementById('foodSearchResults');
-  el.innerHTML = '<div style="color:var(--purple);font-size:13px;text-align:center;padding:24px">🤖 IA analisando o prato...<br><small style="color:var(--text2)">Pode levar alguns segundos</small></div>';
-
-  const file = input.files[0];
-  const reader = new FileReader();
-  reader.onload = async (e) => {
-    const base64 = e.target.result.split(',')[1];
-    const mimeType = file.type || 'image/jpeg';
-    await analyzePhotoWithGemini(base64, mimeType, el);
-  };
-  reader.readAsDataURL(file);
-  input.value = '';
-}
-
-async function analyzePhotoWithGemini(base64, mimeType, el) {
-  const key = state.geminiKey;
-  const prompt = `Analise esta foto de refeição. Para cada alimento visível, estime a porção em gramas e os valores nutricionais por 100g. Responda SOMENTE com JSON válido neste formato exato, sem texto adicional:
-{"foods":[{"name":"nome do alimento","qty":100,"cal":165,"p":31,"c":0,"f":3.6}]}
-Se não houver alimentos visíveis: {"foods":[],"error":"motivo"}`;
-
-  // Modelos Groq com visão, em ordem de preferência
-  const MODELS = [
-    'meta-llama/llama-4-scout-17b-16e-instruct',
-    'llama-3.2-11b-vision-preview',
-  ];
-
-  let resp, data, lastError;
+  el.innerHTML = '<div style="color:var(--purple);font-size:13px;text-align:center;padding:24px">🔄 Buscando refeições do Nutri...<br><small style="color:var(--text2)">Aguarde um momento</small></div>';
+  const today = new Date().toISOString().split('T')[0];
+  const databaseId = 'a0e9fa8e9c704b249349b5da1a9bfd52';
   try {
-    for (const model of MODELS) {
-      const body = JSON.stringify({
-        model,
-        messages: [{
-          role: 'user',
-          content: [
-            { type: 'image_url', image_url: { url: `data:${mimeType};base64,${base64}` } },
-            { type: 'text', text: prompt }
-          ]
-        }],
-        temperature: 0.1,
-        max_tokens: 1024
-      });
-
-      try {
-        resp = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${key}`
-          },
-          body
-        });
-        data = await resp.json();
-
-        if (resp.ok) break; // modelo funcionou
-
-        if (resp.status === 401 || resp.status === 403) throw new Error('Chave Groq inválida. Verifique em Perfil → Integrações.');
-        if (resp.status === 429) throw new Error('Cota esgotada. Tente novamente em alguns minutos.');
-        // outros erros (modelo indisponível etc.) → tenta o próximo
-        lastError = data?.error?.message || `Erro ${resp.status}`;
-      } catch(innerErr) {
-        if (innerErr.message.includes('Chave') || innerErr.message.includes('Cota')) throw innerErr;
-        lastError = innerErr.message;
-      }
-    }
-
-    if (!resp || !resp.ok) throw new Error(lastError || 'Nenhum modelo disponível. Verifique sua chave Groq.');
-
-    const text = data.choices?.[0]?.message?.content || '';
-    // Remove markdown code blocks se existirem
-    const cleaned = text.replace(/```json\s*/gi, '').replace(/```\s*/g, '').trim();
-    const jsonMatch = cleaned.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) throw new Error('Resposta inválida da IA. Tente novamente.');
-
-    let result;
-    try {
-      result = JSON.parse(jsonMatch[0]);
-    } catch(parseErr) {
-      // Tenta extrair só até o último } válido
-      let raw = jsonMatch[0];
-      while (raw.length > 2) {
-        try { result = JSON.parse(raw); break; } catch(e) { raw = raw.slice(0, raw.lastIndexOf('}')); raw += '}'; }
-        if (!raw.includes('{')) break;
-      }
-      if (!result) throw new Error('Não consegui interpretar a resposta da IA. Tente novamente.');
-    }
-    if (result.error || !result.foods?.length) {
-      el.innerHTML = `<div style="color:var(--text2);font-size:13px;text-align:center;padding:16px">🤔 ${result.error || 'Não consegui identificar alimentos. Tente uma foto mais clara.'}</div>`;
+    const resp = await fetch(`https://api.notion.com/v1/databases/${databaseId}/query`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Notion-Version': '2022-06-28',
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        filter: { property: 'Data', date: { equals: today } },
+        sorts: [{ property: 'Data', direction: 'ascending' }]
+      })
+    });
+    if (resp.status === 401) throw new Error('Token inválido. Verifique em Perfil → Integrações.');
+    if (resp.status === 403) throw new Error('Sem permissão. Compartilhe o banco com sua integração no Notion.');
+    if (!resp.ok) throw new Error(`Erro ${resp.status} ao conectar ao Notion.`);
+    const data = await resp.json();
+    if (!data.results || data.results.length === 0) {
+      el.innerHTML = '<div style="color:var(--text2);font-size:13px;text-align:center;padding:24px">📭 Nenhuma refeição registrada hoje no Nutri.<br><small>Registre uma refeição no Nutri Thomaz primeiro.</small></div>';
       return;
     }
-
-    // Converte os alimentos para o formato do app
-    currentSearchResults = result.foods.map((f, i) => ({
-      id: 'ai_' + i,
-      name: f.name,
-      cal: Math.round(f.cal),
-      p: Math.round(f.p * 10) / 10,
-      c: Math.round(f.c * 10) / 10,
-      f: Math.round(f.f * 10) / 10,
-      source: 'ai',
-      aiQty: f.qty, // porção estimada pela IA
-    }));
-
+    currentSearchResults = data.results.map((page, i) => {
+      const name = page.properties['Refeição']?.title?.[0]?.plain_text || 'Refeição';
+      const cal  = page.properties['Calorias (kcal)']?.number || 0;
+      const p    = page.properties['Proteína (g)']?.number || 0;
+      const c    = page.properties['Carboidrato (g)']?.number || 0;
+      const f    = page.properties['Gordura (g)']?.number || 0;
+      const tipo = page.properties['Tipo']?.select?.name || 'Outro';
+      // cal já é o total — qty=100 garante que cal*qty/100 = cal
+      return { id: 'notion_' + i, name, cal, p, c, f, source: 'notion', notionTipo: tipo, aiQty: 100 };
+    });
     el.innerHTML = `
       <div style="font-size:11px;color:var(--purple);margin-bottom:8px;text-align:center;padding:4px 8px;background:var(--purple-dim);border-radius:8px">
-        🤖 IA identificou ${currentSearchResults.length} alimento(s) — toque para ajustar a porção
+        📲 ${currentSearchResults.length} refeição(ões) do Nutri hoje — toque para adicionar
       </div>
       ${currentSearchResults.map((f, i) => `
         <div class="search-result-item" onclick="selectFoodAI(${i})">
           <div style="flex:1;min-width:0">
             <div class="sri-name" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${f.name}</div>
-            <div class="sri-macros">P: ${f.p}g · C: ${f.c}g · G: ${f.f}g <small>(por 100g)</small></div>
+            <div class="sri-macros">P: ${f.p}g · C: ${f.c}g · G: ${f.f}g</div>
           </div>
           <div style="text-align:right;flex-shrink:0;margin-left:8px">
-            <div class="sri-cal">${Math.round(f.cal * f.aiQty / 100)} kcal</div>
-            <div style="font-size:10px;color:var(--purple);margin-top:2px">~${f.aiQty}g estimado</div>
+            <div class="sri-cal">${f.cal} kcal</div>
+            <div style="font-size:10px;color:var(--purple);margin-top:2px">${f.notionTipo}</div>
           </div>
         </div>`).join('')}`;
   } catch(e) {
-    el.innerHTML = `<div style="color:var(--red);font-size:13px;text-align:center;padding:16px">❌ ${e.message || 'Erro ao conectar. Verifique a chave e a internet.'}</div>`;
+    el.innerHTML = `<div style="color:var(--red);font-size:13px;text-align:center;padding:16px">❌ ${e.message || 'Erro ao conectar ao Notion.'}</div>`;
   }
 }
 
@@ -1942,7 +1872,7 @@ function selectFoodAI(index) {
   const food = currentSearchResults[index];
   pendingFood = food;
   closeFoodModal();
-  openFoodQtyModal(food.aiQty || 100); // abre com a porção estimada pela IA
+  openFoodQtyModal(food.aiQty || 100);
 }
 // ───────────────────────────────────────────────────────
 
