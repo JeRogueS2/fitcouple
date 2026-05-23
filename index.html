@@ -1411,7 +1411,9 @@ function checkNutriImport() {
   });
   saveState();
   renderAll();
-  switchScreen('food');
+  const foodNavEl = document.querySelector('.nav-item[onclick*="food"]');
+  if (foodNavEl) switchScreen('food', foodNavEl);
+  else renderFoodScreen();
 }
 
 function updateHeaderDate() {
