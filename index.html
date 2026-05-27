@@ -1414,7 +1414,8 @@ function checkNutriImport() {
   if (!confirm(`📲 Importar do Nutri?\n\n${name}\n${cal} kcal · P: ${p}g · C: ${c}g · G: ${f}g\n\nAdicionar em: ${tipo}`)) return;
   const today = todayKey();
   getDay(today).meals[mealIndex].items.push({
-    id: Date.now(), name, cal, p, c, f, qty: 100, unit: 'g'
+    id: Date.now(), name, cal, p, c, f, qty: 100, unit: 'g',
+    time: new Date().toTimeString().slice(0,5)
   });
   saveState();
   renderDashboard();
@@ -1587,7 +1588,7 @@ function renderFoodScreen() {
       <div class="food-item">
         <div>
           <div class="food-item-name">${it.name}</div>
-          <div class="food-item-qty">${it.unit || (it.qty + 'g')} · P:${Math.round(it.p)}g C:${Math.round(it.c)}g G:${Math.round(it.f)}g</div>
+          <div class="food-item-qty">${it.unit || (it.qty + 'g')} · P:${Math.round(it.p)}g C:${Math.round(it.c)}g G:${Math.round(it.f)}g${it.time ? ` · <span style="cursor:pointer;color:var(--blue)" onclick="editFoodTime(${mi},${ii})" title="Editar horário">🕐 ${it.time}</span>` : ` · <span style="cursor:pointer;color:var(--text3);font-size:11px" onclick="editFoodTime(${mi},${ii})" title="Adicionar horário">+ horário</span>`}</div>
         </div>
         <div style="display:flex;align-items:center;gap:6px">
           <div class="food-item-cal">${Math.round(it.cal)}</div>
@@ -1630,6 +1631,19 @@ function editFoodItem(mealIndex, itemIndex) {
   activeMealIndex = mealIndex;
   editingItem = {mealIndex, itemIndex};
   openFoodQtyModal(item.qty);
+}
+
+function editFoodTime(mealIndex, itemIndex) {
+  const today = todayKey();
+  const item = getDay(today).meals[mealIndex].items[itemIndex];
+  const current = item.time || new Date().toTimeString().slice(0,5);
+  const newTime = prompt('Horário da refeição (HH:MM):', current);
+  if (newTime === null) return;
+  const timeRegex = /^([01]\d|2[0-3]):([0-5]\d)$/;
+  if (!timeRegex.test(newTime.trim())) { alert('Formato inválido. Use HH:MM — ex: 08:30'); return; }
+  item.time = newTime.trim();
+  saveState();
+  renderFoodScreen();
 }
 
 // ═══════════════════════════════════════════════════════
@@ -2083,6 +2097,10 @@ function confirmFoodQty() {
   }
   if (qty <= 0) { alert('Informe a quantidade'); return; }
   const ratio = qty / 100;
+  const today = todayKey();
+  const existingTime = editingItem
+    ? (getDay(today).meals[editingItem.mealIndex].items[editingItem.itemIndex].time || null)
+    : null;
   const item = {
     name: pendingFood.name,
     qty: qty,
@@ -2091,8 +2109,8 @@ function confirmFoodQty() {
     p: pendingFood.p * ratio,
     c: pendingFood.c * ratio,
     f: pendingFood.f * ratio,
+    time: existingTime || new Date().toTimeString().slice(0,5),
   };
-  const today = todayKey();
   if (editingItem) {
     getDay(today).meals[editingItem.mealIndex].items[editingItem.itemIndex] = item;
     editingItem = null;
