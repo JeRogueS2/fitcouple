@@ -2328,6 +2328,8 @@ function logWeight() {
   const existing = wl.findIndex(e => e.date === today);
   if (existing >= 0) wl[existing].w = val;
   else wl.push({date: today, w: val});
+  // Sincroniza com o perfil também
+  user().profile.weight = val;
   saveState();
   document.getElementById('weightInput').value = '';
   renderProgressScreen();
@@ -2416,7 +2418,16 @@ function renderProfileScreen() {
 
 function saveProfile() {
   const prof = user().profile;
-  prof.weight = parseFloat(document.getElementById('pf_weight').value) || prof.weight;
+  const newWeight = parseFloat(document.getElementById('pf_weight').value);
+  if (newWeight && newWeight !== prof.weight) {
+    // Sincroniza com o weightLog para aparecer no gráfico
+    const today = todayKey();
+    const wl = user().weightLog;
+    const existing = wl.findIndex(e => e.date === today);
+    if (existing >= 0) wl[existing].w = newWeight;
+    else wl.push({date: today, w: newWeight});
+  }
+  prof.weight = newWeight || prof.weight;
   prof.height = parseFloat(document.getElementById('pf_height').value) || prof.height;
   prof.age = parseInt(document.getElementById('pf_age').value) || prof.age;
   prof.gender = document.getElementById('pf_gender').value;
@@ -2427,6 +2438,7 @@ function saveProfile() {
   saveState();
   renderProfileScreen();
   renderDashboard();
+  if (typeof updateCharts === 'function') updateCharts();
   alert('✅ Perfil atualizado!');
 }
 
