@@ -1134,7 +1134,7 @@ async function getStravaAccessToken(userId) {
     saveState();
     return data.access_token;
   } catch(e) {
-    return t.access_token; // tenta com token atual
+    return null; // refresh falhou — forçar reconexão
   }
 }
 
@@ -1154,6 +1154,12 @@ async function syncStravaActivities() {
       { headers: {'Authorization': `Bearer ${token}`} }
     );
     const activities = await resp.json();
+    if (resp.status === 401 || resp.status === 403) {
+      delete state[currentUser].stravaTokens;
+      saveState();
+      renderStravaStatus();
+      throw new Error('Token expirado. Reconecte o Strava em Perfil → Integrações.');
+    }
     if (!resp.ok) throw new Error(activities.message || 'Erro na API Strava');
 
     if (!activities.length) {
