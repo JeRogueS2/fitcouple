@@ -551,6 +551,13 @@ select.form-input { cursor: pointer; }
 
   <!-- FOOD SCREEN -->
   <div class="screen" id="screen-food">
+    <!-- Navegação de data -->
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+      <button onclick="foodDateShift(-1)" style="background:var(--card2);border:none;border-radius:var(--radius-sm);padding:8px 14px;color:var(--text1);font-size:18px;cursor:pointer">‹</button>
+      <div id="foodDateLabel" style="font-size:14px;font-weight:600;color:var(--text1);text-align:center"></div>
+      <button onclick="foodDateShift(1)" id="foodDateNext" style="background:var(--card2);border:none;border-radius:var(--radius-sm);padding:8px 14px;color:var(--text1);font-size:18px;cursor:pointer">›</button>
+    </div>
+
     <div class="card">
       <div class="card-title">Total do dia</div>
       <div style="display:flex;justify-content:space-around;text-align:center">
@@ -1397,12 +1404,14 @@ function launchApp() {
   document.getElementById('mainContent').style.display = 'block';
   document.getElementById('bottomNav').style.display = 'flex';
 
+  selectedFoodDate = todayKey();
   updateUserSwitcher();
   updateHeaderDate();
   renderAll();
   initCharts();
   updateNotionUI();
   checkNutriImport();
+  checkWorkoutImport();
 }
 
 function checkNutriImport() {
@@ -1432,6 +1441,78 @@ function checkNutriImport() {
   const allNavItems = document.querySelectorAll('.nav-item');
   allNavItems.forEach(n => { if ((n.getAttribute('onclick')||'').includes("'food'")) n.classList.add('active'); });
   renderFoodScreen();
+}
+
+function checkWorkoutImport() {
+  const params = new URLSearchParams(window.location.search);
+
+  // ── Importação em lote: ?sync=[...] (gerado pelo Claude Code / Garmin) ──
+  if (params.has('sync')) {
+    try {
+      const workouts = JSON.parse(decodeURIComponent(params.get('sync')));
+      window.history.replaceState({}, '', window.location.pathname);
+      if (!Array.isArray(workouts) || workouts.length === 0) return;
+
+      const typeLabels = { musculacao:'Musculação', corrida:'Corrida', caminhada:'Caminhada',
+        bicicleta:'Bicicleta', pilates:'Pilates', outro:'Outro' };
+      const lines = workouts.map(w => {
+        const label = typeLabels[w.type] || w.type;
+        const parts = [w.date, w.desc || label, w.dur ? `${w.dur}min` : '', w.kcal ? `${w.kcal}kcal` : ''].filter(Boolean);
+        return '• ' + parts.join(' · ');
+      }).join('\n');
+
+      if (!confirm(`📲 Sincronizar ${workouts.length} treino(s) do Garmin?\n\n${lines}`)) return;
+
+      let imported = 0;
+      workouts.forEach(w => {
+        const dateKey = w.date || todayKey();
+        const day = getDay(dateKey);
+        const dup = day.workouts.some(x => x.type === w.type && x.duration === w.dur && x.source === 'garmin');
+        if (dup) return;
+        day.workouts.push({ type: w.type, desc: w.desc || '', duration: w.dur || 0, kcal: w.kcal || 0, source: 'garmin' });
+        imported++;
+      });
+
+      saveState();
+      renderDashboard();
+      alert(`✅ ${imported} treino(s) importado(s) do Garmin!`);
+      document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+      document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+      document.getElementById('screen-workout').classList.add('active');
+      document.querySelectorAll('.nav-item').forEach(n => { if ((n.getAttribute('onclick')||'').includes("'workout'")) n.classList.add('active'); });
+      renderWorkoutScreen();
+    } catch(e) {
+      alert('Erro ao importar sync: ' + e.message);
+    }
+    return;
+  }
+
+  // ── Importação simples: ?workout= (gerado pelo PT Thomaz) ──
+  if (!params.has('workout')) return;
+  const type    = params.get('workout') || 'musculacao';
+  const dur     = parseInt(params.get('dur') || 0);
+  const kcal    = parseInt(params.get('kcal') || 0);
+  const desc    = params.get('desc') || '';
+  const date    = params.get('date') || todayKey();
+  window.history.replaceState({}, '', window.location.pathname);
+
+  const typeLabels = { musculacao:'Musculação', corrida:'Corrida', caminhada:'Caminhada',
+    bicicleta:'Bicicleta', pilates:'Pilates', outro:'Outro' };
+  const label = typeLabels[type] || type;
+  const isToday = date === todayKey();
+  const dateLabel = isToday ? 'hoje' : date;
+  const lines = [desc || label, dur ? `⏱️ ${dur} min` : '', kcal ? `🔥 ${kcal} kcal` : ''].filter(Boolean).join('\n');
+
+  if (!confirm(`🏋️ Importar treino?\n\n${lines}\n\nAdicionar em: ${dateLabel}`)) return;
+
+  getDay(date).workouts.push({ type, desc, duration: dur, kcal, source: 'pt' });
+  saveState();
+  renderDashboard();
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  document.getElementById('screen-workout').classList.add('active');
+  document.querySelectorAll('.nav-item').forEach(n => { if ((n.getAttribute('onclick')||'').includes("'workout'")) n.classList.add('active'); });
+  renderWorkoutScreen();
 }
 
 function updateHeaderDate() {
@@ -1577,10 +1658,37 @@ function renderDashboard() {
 // ═══════════════════════════════════════════════════════
 let activeMealIndex = 0;
 
+// ─── DATA SELECIONADA NA TELA DE COMIDA ──────────────────
+let selectedFoodDate = null; // inicializado em launchApp
+
+function foodDateShift(delta) {
+  const d = new Date(selectedFoodDate + 'T12:00:00');
+  d.setDate(d.getDate() + delta);
+  const next = d.toISOString().slice(0,10);
+  if (next > todayKey()) return; // não vai além de hoje
+  selectedFoodDate = next;
+  renderFoodScreen();
+}
+
 function renderFoodScreen() {
-  const today = todayKey();
-  const day = getDay(today);
-  const totals = getDayTotals(today);
+  if (!selectedFoodDate || selectedFoodDate > todayKey()) selectedFoodDate = todayKey();
+  const dateKey = selectedFoodDate;
+  const isToday = dateKey === todayKey();
+
+  // Label da data
+  const labelEl = document.getElementById('foodDateLabel');
+  if (labelEl) {
+    const [y,m,dd] = dateKey.split('-');
+    const dateObj = new Date(+y, +m-1, +dd);
+    const opts = { weekday:'short', day:'numeric', month:'short' };
+    labelEl.textContent = isToday ? '📅 Hoje' : dateObj.toLocaleDateString('pt-BR', opts);
+  }
+  // Desabilita seta direita se for hoje
+  const nextBtn = document.getElementById('foodDateNext');
+  if (nextBtn) nextBtn.disabled = isToday;
+
+  const day = getDay(dateKey);
+  const totals = getDayTotals(dateKey);
 
   document.getElementById('foodTotalCal').textContent = totals.cal;
   document.getElementById('foodTotalP').textContent = totals.p + 'g';
@@ -1615,16 +1723,16 @@ function renderFoodScreen() {
 }
 
 function deleteFoodItem(mealIndex, itemIndex) {
-  const today = todayKey();
-  getDay(today).meals[mealIndex].items.splice(itemIndex, 1);
+  const dateKey = selectedFoodDate || todayKey();
+  getDay(dateKey).meals[mealIndex].items.splice(itemIndex, 1);
   saveState();
   renderFoodScreen();
   renderDashboard();
 }
 
 function editFoodItem(mealIndex, itemIndex) {
-  const today = todayKey();
-  const item = getDay(today).meals[mealIndex].items[itemIndex];
+  const dateKey = selectedFoodDate || todayKey();
+  const item = getDay(dateKey).meals[mealIndex].items[itemIndex];
   const ratio = item.qty > 0 ? item.qty / 100 : 1;
   pendingFood = {
     id: 'edit_' + Date.now(),
@@ -1640,8 +1748,8 @@ function editFoodItem(mealIndex, itemIndex) {
 }
 
 function editFoodTime(mealIndex, itemIndex) {
-  const today = todayKey();
-  const item = getDay(today).meals[mealIndex].items[itemIndex];
+  const dateKey = selectedFoodDate || todayKey();
+  const item = getDay(dateKey).meals[mealIndex].items[itemIndex];
   const current = item.time || new Date().toTimeString().slice(0,5);
   const newTime = prompt('Horário da refeição (HH:MM):', current);
   if (newTime === null) return;
@@ -2103,9 +2211,9 @@ function confirmFoodQty() {
   }
   if (qty <= 0) { alert('Informe a quantidade'); return; }
   const ratio = qty / 100;
-  const today = todayKey();
+  const dateKey = selectedFoodDate || todayKey();
   const existingTime = editingItem
-    ? (getDay(today).meals[editingItem.mealIndex].items[editingItem.itemIndex].time || null)
+    ? (getDay(dateKey).meals[editingItem.mealIndex].items[editingItem.itemIndex].time || null)
     : null;
   const item = {
     name: pendingFood.name,
@@ -2118,10 +2226,10 @@ function confirmFoodQty() {
     time: existingTime || new Date().toTimeString().slice(0,5),
   };
   if (editingItem) {
-    getDay(today).meals[editingItem.mealIndex].items[editingItem.itemIndex] = item;
+    getDay(dateKey).meals[editingItem.mealIndex].items[editingItem.itemIndex] = item;
     editingItem = null;
   } else {
-    getDay(today).meals[activeMealIndex].items.push(item);
+    getDay(dateKey).meals[activeMealIndex].items.push(item);
   }
   saveState();
   document.getElementById('foodQtyModal').classList.remove('open');
@@ -2523,101 +2631,4 @@ function addWater(ml) {
 function resetWater() {
   if (!confirm('Zerar o contador de água?')) return;
   getDay(todayKey()).water = 0;
-  saveState();
-  renderWaterCard();
-}
-
-function waterGoal() {
-  return Math.round((user().profile.weight || 70) * 35);
-}
-
-function renderWaterCard() {
-  const water = getDay(todayKey()).water || 0;
-  const goal = waterGoal();
-  const pct = Math.min(Math.round(water / goal * 100), 100);
-  const amtEl = document.getElementById('waterAmount');
-  const barEl = document.getElementById('waterBar');
-  const pctEl = document.getElementById('waterPct');
-  const goalLabel = document.getElementById('waterGoalLabel');
-  if (!amtEl) return;
-  amtEl.textContent = water;
-  if (goalLabel) goalLabel.textContent = ` / ${goal} ml`;
-  barEl.style.width = pct + '%';
-  if (water >= goal) {
-    pctEl.textContent = '✅ Meta!';
-    pctEl.style.color = 'var(--green)';
-    barEl.style.background = 'var(--green)';
-  } else {
-    pctEl.textContent = pct + '%';
-    pctEl.style.color = 'var(--blue)';
-    barEl.style.background = 'var(--blue)';
-  }
-}
-
-
-
-// ═══════════════════════════════════════════════════════
-//  INIT
-// ═══════════════════════════════════════════════════════
-loadState();
-
-(async () => {
-  const _urlParams = new URLSearchParams(window.location.search);
-  const _stravaCode = _urlParams.get('code');
-  const _stravaScope = _urlParams.get('scope') || '';
-  const _urlUser = _urlParams.get('user');
-  const thomazReady = state.thomaz.profile.setup;
-  const jessicaReady = state.jessica.profile.setup;
-
-  // Callback do OAuth Strava
-  if (_stravaCode && _stravaScope.includes('activity')) {
-    const pendingUser = localStorage.getItem('strava_pending_user') || (thomazReady ? 'thomaz' : 'jessica');
-    localStorage.removeItem('strava_pending_user');
-    window.history.replaceState({}, '', window.location.pathname);
-
-    currentUser = state[pendingUser]?.profile?.setup ? pendingUser
-      : thomazReady ? 'thomaz'
-      : jessicaReady ? 'jessica'
-      : null;
-    if (!currentUser) { document.getElementById('setupScreen').classList.add('active'); return; }
-
-    launchApp();
-    document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
-    document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
-    document.getElementById('screen-profile').classList.add('active');
-    document.querySelector('.nav-item:last-child').classList.add('active');
-    renderProfileScreen();
-    await exchangeStravaCode(_stravaCode, pendingUser);
-    return;
-  }
-
-  if (_urlParams.get('error')) {
-    localStorage.removeItem('strava_pending_user');
-    window.history.replaceState({}, '', window.location.pathname);
-  }
-
-  if (_urlUser === 'thomaz' || _urlUser === 'jessica') {
-    if (state[_urlUser].profile.setup) {
-      currentUser = _urlUser;
-      launchApp();
-    } else {
-      document.getElementById('setupScreen').classList.add('active');
-      setTimeout(() => pickUser(_urlUser), 100);
-    }
-  } else if (thomazReady || jessicaReady) {
-    currentUser = thomazReady ? 'thomaz' : 'jessica';
-    launchApp();
-  } else {
-    document.getElementById('setupScreen').classList.add('active');
-  }
-
-  document.getElementById('foodModal').addEventListener('click', function(e) {
-    if (e.target === this) closeFoodModal();
-  });
-  document.getElementById('foodQtyModal').addEventListener('click', function(e) {
-    if (e.target === this) closeFoodQtyModal();
-  });
-})();
-</script>
-</body>
-</html>
+  saveState(
